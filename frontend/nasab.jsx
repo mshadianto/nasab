@@ -277,25 +277,33 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 .m-body{padding:16px 20px}.m-ftr{padding:12px 20px;display:flex;gap:6px;justify-content:flex-end;border-top:1px solid var(--bdr)}
 
 /* ── CANVAS ── */
-.cvs{width:100%;height:100%;position:relative;overflow:hidden;background:var(--bg0);cursor:grab;touch-action:none}.cvs.grabbing{cursor:grabbing}
+.cvs{width:100%;height:100%;position:relative;overflow:hidden;background:var(--bg0);cursor:grab;touch-action:none;background-image:radial-gradient(circle at 1px 1px,var(--bdr) .5px,transparent 0);background-size:32px 32px}.cvs.grabbing{cursor:grabbing}
 .cvs-inner{position:absolute;top:0;left:0;transform-origin:0 0}
 .gl{position:absolute;left:0;right:0;pointer-events:none;z-index:1}
-.gl-strip{position:absolute;left:0;top:0;bottom:0;width:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;z-index:2;padding:4px 2px;background:linear-gradient(90deg,rgba(7,9,14,.9) 60%,transparent)}
-.gl-emoji{font-size:16px}.gl-title{font-size:7px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;text-align:center;max-width:44px;line-height:1.2}.gl-num{font-size:6px;opacity:.4;font-family:var(--f-mono)}
-.gl-bg{position:absolute;left:0;right:0;top:0;bottom:0;opacity:.02;border-top:1px dashed;border-bottom:1px dashed}
-.cc{position:absolute;width:150px;min-height:80px;background:var(--bg2);border:1.5px solid var(--bdr);border-radius:var(--r);cursor:grab;user-select:none;transition:box-shadow .2s;overflow:hidden;z-index:10}
-.cc:hover{z-index:20;box-shadow:0 6px 24px rgba(0,0,0,.4)}.cc.dragging{z-index:50;box-shadow:0 10px 36px rgba(0,0,0,.5);opacity:.92;cursor:grabbing}.cc.selected{border-color:var(--pri);box-shadow:0 0 20px rgba(20,184,166,.12)}
+.gl-strip{position:absolute;left:0;top:0;bottom:0;width:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;z-index:2;padding:6px 2px;background:linear-gradient(90deg,var(--bg0) 50%,transparent);backdrop-filter:blur(4px)}
+.gl-emoji{font-size:18px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}.gl-title{font-size:7px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;text-align:center;max-width:48px;line-height:1.2}.gl-num{font-size:6px;opacity:.4;font-family:var(--f-mono)}
+.gl-bg{position:absolute;left:0;right:0;top:0;bottom:0;opacity:.025;border-top:1.5px dashed;border-bottom:1.5px dashed}
+/* Cards - glassmorphism */
+.cc{position:absolute;width:150px;min-height:80px;background:var(--bg2);border:1.5px solid var(--bdr);border-radius:10px;cursor:grab;user-select:none;transition:all .25s cubic-bezier(.4,0,.2,1);overflow:hidden;z-index:10;backdrop-filter:blur(8px)}
+.cc::before{content:'';position:absolute;inset:0;border-radius:10px;opacity:0;transition:opacity .25s;z-index:-1}
+.cc.male::before{background:radial-gradient(ellipse at 30% 0%,rgba(56,189,248,.06),transparent 70%)}.cc.female::before{background:radial-gradient(ellipse at 30% 0%,rgba(217,70,239,.06),transparent 70%)}
+.cc:hover{z-index:20;transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.35),0 0 0 1px var(--bdr2)}.cc:hover::before{opacity:1}
+.cc.dragging{z-index:50;box-shadow:0 16px 48px rgba(0,0,0,.5);opacity:.9;cursor:grabbing;transform:scale(1.03)}
+.cc.selected{border-color:var(--pri);box-shadow:0 0 24px rgba(20,184,166,.15),0 0 0 2px rgba(20,184,166,.2)}
 .cc.male{border-color:var(--male-bdr)}.cc.female{border-color:var(--fem-bdr)}
-.cc-bar{height:2px;width:100%}.cc.male .cc-bar{background:linear-gradient(90deg,var(--male-t),transparent)}.cc.female .cc-bar{background:linear-gradient(90deg,var(--fem-t),transparent)}
-.cc-body{padding:7px 9px;display:flex;align-items:center;gap:8px}
-.cc-av{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-family:var(--f-display);flex-shrink:0}
-.cc-av.male{background:var(--male-bg);color:var(--male-t);border:1px solid var(--male-bdr)}.cc-av.female{background:var(--fem-bg);color:var(--fem-t);border:1px solid var(--fem-bdr)}
-.cc-info{min-width:0;flex:1}.cc-name{font-size:11px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.cc-meta{font-size:9px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cc-gen{position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%}
+.cc-bar{height:3px;width:100%}.cc.male .cc-bar{background:linear-gradient(90deg,var(--male-t),var(--acc),transparent)}.cc.female .cc-bar{background:linear-gradient(90deg,var(--fem-t),var(--rose),transparent)}
+.cc-body{padding:8px 10px;display:flex;align-items:center;gap:9px}
+.cc-av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;font-family:var(--f-display);flex-shrink:0;position:relative}
+.cc-av.male{background:linear-gradient(135deg,var(--male-bg),#162a48);color:var(--male-t);border:2px solid var(--male-bdr);box-shadow:0 2px 8px rgba(56,189,248,.12)}
+.cc-av.female{background:linear-gradient(135deg,var(--fem-bg),#2e1640);color:var(--fem-t);border:2px solid var(--fem-bdr);box-shadow:0 2px 8px rgba(217,70,239,.12)}
+.cc-status{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg2)}
+.cc-info{min-width:0;flex:1}.cc-name{font-size:11px;font-weight:600;line-height:1.25;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cc-meta{font-size:8px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.2px}.cc-gen{position:absolute;top:0;right:0;width:18px;height:18px;border-radius:0 10px 0 8px;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#000;font-family:var(--f-mono)}
 .conn-svg{position:absolute;top:0;left:0;pointer-events:none;z-index:5}
-.zm{position:absolute;bottom:14px;right:14px;display:flex;flex-direction:column;gap:3px;z-index:60}
-.zm button{width:30px;height:30px;border-radius:var(--rs);border:1px solid var(--bdr);background:var(--bg2);color:var(--t1);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:var(--f-body)}.zm button:hover{background:var(--bg3)}
-.mm{position:absolute;bottom:14px;left:14px;width:150px;height:80px;background:var(--bg1);border:1px solid var(--bdr);border-radius:var(--rs);overflow:hidden;z-index:60;opacity:.7}.mm:hover{opacity:1}
+@keyframes flowDash{from{stroke-dashoffset:20}to{stroke-dashoffset:0}}
+.zm{position:absolute;bottom:14px;right:14px;display:flex;flex-direction:column;gap:3px;z-index:60;backdrop-filter:blur(8px)}
+.zm button{width:32px;height:32px;border-radius:8px;border:1px solid var(--bdr);background:var(--bg2);color:var(--t1);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:var(--f-body);transition:all .15s}.zm button:hover{background:var(--bg3);transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.mm{position:absolute;bottom:14px;left:14px;width:150px;height:80px;background:var(--bg1);border:1px solid var(--bdr);border-radius:var(--rs);overflow:hidden;z-index:60;opacity:.6;transition:all .2s;backdrop-filter:blur(4px)}.mm:hover{opacity:1;box-shadow:0 4px 16px rgba(0,0,0,.3)}
 
 /* ── SIDEBAR ── */
 .sb{position:absolute;top:0;right:0;bottom:0;width:310px;background:var(--bg1);border-left:1px solid var(--bdr);z-index:80;overflow-y:auto;animation:sIn .2s ease}
@@ -408,8 +416,12 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 [data-theme="light"] .auth-hero{background:linear-gradient(160deg,#eef2f7 0%,#e4eaf2 50%,#dce4ef 100%)}
 [data-theme="light"] .auth-hero::before{background:radial-gradient(circle,rgba(13,148,136,.06) 0%,transparent 70%)}
 [data-theme="light"] .auth-hero::after{background:radial-gradient(circle,rgba(79,70,229,.04) 0%,transparent 70%)}
-[data-theme="light"] .cc{box-shadow:0 1px 4px rgba(0,0,0,.08)}
-[data-theme="light"] .cc:hover{box-shadow:0 4px 16px rgba(0,0,0,.12)}
+[data-theme="light"] .cvs{background-image:radial-gradient(circle at 1px 1px,var(--bdr) .5px,transparent 0)}
+[data-theme="light"] .gl-strip{background:linear-gradient(90deg,var(--bg0) 50%,transparent)}
+[data-theme="light"] .cc{box-shadow:0 2px 8px rgba(0,0,0,.08);backdrop-filter:none;background:var(--bg1)}
+[data-theme="light"] .cc:hover{box-shadow:0 8px 24px rgba(0,0,0,.12);transform:translateY(-3px)}
+[data-theme="light"] .cc.male::before{background:radial-gradient(ellipse at 30% 0%,rgba(3,105,161,.06),transparent 70%)}
+[data-theme="light"] .cc.female::before{background:radial-gradient(ellipse at 30% 0%,rgba(190,24,93,.06),transparent 70%)}
 [data-theme="light"] .fam-card{box-shadow:0 1px 4px rgba(0,0,0,.06)}
 [data-theme="light"] .fam-card:hover{box-shadow:0 6px 20px rgba(0,0,0,.1)}
 [data-theme="light"] .modal{box-shadow:0 16px 48px rgba(0,0,0,.15)}
@@ -876,13 +888,31 @@ function CanvasView({pp,onSel,selId,onPos,savedPos}){
   return(<div ref={wr} className={`cvs ${panning?"grabbing":""}`} onMouseDown={onPS} onTouchStart={onPS}>
     <div className="cvs-inner" style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zm})`,width:bnd.w,height:bnd.h}}>
       {Object.entries(gls).map(([g,lane])=>{const gi=parseInt(g);const gl=GL[gi]||{l:`Gen ${gi+1}`,i:"👤"};const c=GC[gi%GC.length];return(<div key={g} className="gl" style={{top:lane.mi-22,height:lane.mx-lane.mi+44}}><div className="gl-bg" style={{borderColor:c,background:c}}/><div className="gl-strip" style={{color:c}}><span className="gl-emoji">{gl.i}</span><span className="gl-title">{gl.l}</span><span className="gl-num">Gen {gi+1}</span></div></div>)})}
-      <svg className="conn-svg" width={bnd.w} height={bnd.h}>{conns.map((c,i)=>{
-        if(c.t==="sp"){const mx=(c.x1+c.x2)/2;return<g key={i}><line x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--rose)" strokeWidth="1.5" strokeDasharray="5,4" opacity=".5"/><rect x={mx-28} y={c.y1-9} width="56" height="14" rx="7" fill="var(--rose)" opacity=".15"/><text x={mx} y={c.y1+1} textAnchor="middle" fontSize="7" fill="var(--rose)" fontWeight="700" fontFamily="var(--f-mono)" opacity=".8">NIKAH</text></g>}
-        if(c.t==="pd"){const mx=c.x1;return<g key={i}><line x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--pri)" strokeWidth="1.5" opacity=".4"/>{c.label&&<><rect x={mx-24} y={(c.y1+c.y2)/2-7} width="48" height="14" rx="7" fill="var(--pri)" opacity=".12"/><text x={mx} y={(c.y1+c.y2)/2+2} textAnchor="middle" fontSize="6.5" fill="var(--pri)" fontWeight="700" fontFamily="var(--f-mono)" opacity=".7">{c.label}</text></>}</g>}
-        if(c.t==="br")return<line key={i} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--pri)" strokeWidth="1.5" opacity=".3"/>
-        if(c.t==="cd"){const clr=c.gender==="male"?"var(--male-t)":"var(--fem-t)";return<g key={i}><line x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke={clr} strokeWidth="1.5" opacity=".35"/><circle cx={c.x2} cy={c.y2} r="2.5" fill={clr} opacity=".5"/></g>}
-        return<line key={i} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--bdr2)" strokeWidth="1.5"/>})}</svg>
-      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];const bd=p.birthDate?new Date(p.birthDate).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}):"";return(<div key={p.id} className={`cc ${p.gender} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""}`} style={{left:po.x,top:po.y}} onMouseDown={e=>dS(e,p.id)} onTouchStart={e=>dS(e,p.id)} onClick={e=>handleCardClick(e,p)}><div className="cc-bar"/><div className="cc-body"><div className={`cc-av ${p.gender}`}>{ini(p.name)}</div><div className="cc-info"><div className="cc-name">{p.name}</div><div className="cc-meta">{p.gender==="male"?"♂":"♀"}{bd?` · ${bd}`:""}{p.deathDate?" · Alm.":""}</div>{p.location?.address&&<div className="cc-meta">📍 {p.location.address.split(",")[0]}</div>}</div></div><div className="cc-gen" style={{background:c}}/></div>)})}
+      <svg className="conn-svg" width={bnd.w} height={bnd.h}>
+        <defs>
+          <linearGradient id="gsp" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="var(--rose)" stopOpacity=".6"/><stop offset="50%" stopColor="var(--rose)" stopOpacity=".3"/><stop offset="100%" stopColor="var(--rose)" stopOpacity=".6"/></linearGradient>
+          <linearGradient id="gpc" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor="var(--pri)" stopOpacity=".5"/><stop offset="100%" stopColor="var(--pri)" stopOpacity=".2"/></linearGradient>
+          <filter id="glow"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        {conns.map((c,i)=>{
+        if(c.t==="sp"){const mx=(c.x1+c.x2)/2,gap=c.x2-c.x1;return<g key={i}>
+          <path d={`M${c.x1},${c.y1} C${c.x1+gap*.3},${c.y1-12} ${c.x2-gap*.3},${c.y1-12} ${c.x2},${c.y2}`} fill="none" stroke="url(#gsp)" strokeWidth="2" strokeDasharray="6,4" style={{animation:"flowDash 1.5s linear infinite"}}/>
+          <circle cx={c.x1} cy={c.y1} r="3" fill="var(--rose)" opacity=".4"/>
+          <circle cx={c.x2} cy={c.y2} r="3" fill="var(--rose)" opacity=".4"/>
+          <rect x={mx-20} y={c.y1-18} width="40" height="15" rx="7.5" fill="var(--bg1)" stroke="var(--rose)" strokeWidth=".5" opacity=".9"/>
+          <text x={mx} y={c.y1-8} textAnchor="middle" fontSize="7" fill="var(--rose)" fontWeight="700" fontFamily="var(--f-mono)">NIKAH</text>
+        </g>}
+        if(c.t==="pd"){const mx=c.x1,my=(c.y1+c.y2)/2;return<g key={i}>
+          <path d={`M${c.x1},${c.y1} C${c.x1},${c.y1+20} ${c.x2},${c.y2-20} ${c.x2},${c.y2}`} fill="none" stroke="url(#gpc)" strokeWidth="2"/>
+          {c.label&&<><rect x={mx-26} y={my-8} width="52" height="16" rx="8" fill="var(--bg1)" stroke="var(--pri)" strokeWidth=".5" opacity=".9"/><text x={mx} y={my+2.5} textAnchor="middle" fontSize="7" fill="var(--pri)" fontWeight="700" fontFamily="var(--f-mono)">{c.label}</text></>}
+        </g>}
+        if(c.t==="br"){const r=6;return<path key={i} d={`M${c.x1+r},${c.y1} L${c.x2-r},${c.y2} M${c.x1},${c.y1} Q${c.x1},${c.y1} ${c.x1+r},${c.y1} M${c.x2-r},${c.y2} Q${c.x2},${c.y2} ${c.x2},${c.y2}`} fill="none" stroke="var(--pri)" strokeWidth="1.5" opacity=".25"/>}
+        if(c.t==="cd"){const clr=c.gender==="male"?"var(--male-t)":"var(--fem-t)";const dy=c.y2-c.y1;return<g key={i}>
+          <path d={`M${c.x1},${c.y1} C${c.x1},${c.y1+dy*.4} ${c.x2},${c.y2-dy*.4} ${c.x2},${c.y2}`} fill="none" stroke={clr} strokeWidth="1.5" opacity=".4"/>
+          <circle cx={c.x2} cy={c.y2} r="3.5" fill={clr} opacity=".3"/><circle cx={c.x2} cy={c.y2} r="1.5" fill={clr} opacity=".7"/>
+        </g>}
+        return null})}</svg>
+      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];const gl=GL[g]||{l:`Gen ${g+1}`};const bd=p.birthDate?new Date(p.birthDate).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}):"";const alive=!p.deathDate;return(<div key={p.id} className={`cc ${p.gender} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""}`} style={{left:po.x,top:po.y}} onMouseDown={e=>dS(e,p.id)} onTouchStart={e=>dS(e,p.id)} onClick={e=>handleCardClick(e,p)}><div className="cc-bar"/><div className="cc-body"><div className={`cc-av ${p.gender}`}>{ini(p.name)}<div className="cc-status" style={{background:alive?"#22c55e":"var(--t3)"}}/></div><div className="cc-info"><div className="cc-name">{p.name}</div><div className="cc-meta">{p.gender==="male"?"♂":"♀"}{bd?` · ${bd}`:""}{!alive?" · Alm.":""}</div>{p.location?.address&&<div className="cc-meta">📍 {p.location.address.split(",")[0]}</div>}</div></div><div className="cc-gen" style={{background:c}}>{g+1}</div></div>)})}
     </div>
     <div className="zm"><button onClick={()=>setZm(z=>Math.min(2.5,z+.12))}>+</button><button onClick={()=>setZm(z=>Math.max(.1,z-.12))}>−</button><button onClick={fit} title="Fit semua"><Ic.Fit/></button><button onClick={()=>comfortView(pos)} title="Zoom nyaman" style={{fontSize:10}}>🏠</button><div style={{fontSize:8,textAlign:"center",color:"var(--t3)",fontFamily:"var(--f-mono)"}}>{Math.round(zm*100)}%</div></div>
     <div className="mm"><svg width="150" height="80" viewBox={`0 0 ${bnd.w} ${bnd.h}`}>{pp.map(p=>{const po=pos[p.id];return po?<rect key={p.id} x={po.x} y={po.y} width={CW} height={CH} rx="3" fill={p.gender==="male"?"var(--male-t)":"var(--fem-t)"} opacity=".35"/>:null})}</svg></div>
