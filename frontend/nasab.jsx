@@ -397,6 +397,11 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 .role-super_admin{background:#7c3aed22;color:#a78bfa}
 .role-admin{background:#6366f122;color:#818cf8}
 .role-user{background:var(--bg3);color:var(--t2)}
+/* PWA Install Banner */
+.pwa-banner{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:var(--bg1);border:1px solid var(--pri);border-radius:12px;padding:10px 14px;z-index:400;box-shadow:0 8px 32px rgba(0,0,0,.4);animation:mUp .3s ease;max-width:calc(100vw - 32px)}
+.pwa-icon{font-size:24px;flex-shrink:0}
+.pwa-text{flex:1;min-width:0}.pwa-text b{display:block;font-size:13px;font-weight:600}.pwa-text span{font-size:10px;color:var(--t3)}
+@media(max-width:480px){.pwa-banner{bottom:8px;padding:8px 10px;gap:8px}.pwa-text b{font-size:12px}}
 /* Theme toggle */
 .theme-btn{width:32px;height:32px;border-radius:var(--rs);border:1px solid var(--bdr);background:var(--bg2);color:var(--t2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0;padding:0}
 .theme-btn:hover{background:var(--bg3);border-color:var(--bdr2);transform:translateY(-1px)}
@@ -983,6 +988,14 @@ function IEModal({pp,onImport,onClose}){const[j,setJ]=useState("");const[t,setT]
 const ThemeCtx=React.createContext({theme:"dark",toggle:()=>{}});
 function useTheme(){return React.useContext(ThemeCtx)}
 function ThemeBtn(){const{theme,toggle}=useTheme();return<button className="theme-btn" onClick={toggle} title={theme==="dark"?"Light mode":"Dark mode"}>{theme==="dark"?"☀️":"🌙"}</button>}
+function InstallBanner(){
+  const[deferredPrompt,setDP]=useState(null);const[show,setShow]=useState(false);const[dismissed,setDismissed]=useState(()=>localStorage.getItem("nasab-pwa-dismiss")==="1");
+  useEffect(()=>{const h=e=>{e.preventDefault();setDP(e);if(!dismissed)setShow(true)};window.addEventListener("beforeinstallprompt",h);return()=>window.removeEventListener("beforeinstallprompt",h)},[dismissed]);
+  const install=async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();const{outcome}=await deferredPrompt.userChoice;if(outcome==="accepted")setShow(false);setDP(null)};
+  const dismiss=()=>{setShow(false);setDismissed(true);localStorage.setItem("nasab-pwa-dismiss","1")};
+  if(!show)return null;
+  return<div className="pwa-banner"><div className="pwa-icon">🌳</div><div className="pwa-text"><b>Install NASAB</b><span>Akses cepat dari home screen</span></div><button className="btn btn-p btn-sm" onClick={install}>Install</button><button className="btn btn-sm btn-ghost" onClick={dismiss} style={{padding:"4px 6px",fontSize:10}}>Nanti</button></div>
+}
 export default function App(){
   const[user,setUser]=useState(null);const[af,setAf]=useState(null);const[adminView,setAdminView]=useState(false);const[loading,setLoading]=useState(true);
   const[theme,setTheme]=useState(()=>localStorage.getItem("nasab-theme")||"dark");
@@ -992,5 +1005,5 @@ export default function App(){
   const login=async u=>{setUser(u)};
   const logout=async()=>{setUser(null);setAf(null);setAdminView(false);API.clearSession()};
   if(loading)return<div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg0)",fontFamily:"var(--f-display)",fontSize:20,color:"var(--t3)"}}>Loading...</div>;
-  return<ThemeCtx.Provider value={{theme,toggle}}><style>{css}</style>{!user?<AuthScreen onLogin={login}/>:af?<Workspace family={af} user={user} onBack={()=>setAf(null)}/>:adminView?<AdminPanel user={user} onBack={()=>setAdminView(false)} onSelectFamily={f=>setAf(f)}/>:<Dashboard user={user} onLogout={logout} onSelectFamily={f=>setAf(f)} onCreateFamily={(u,f)=>{setUser(u);setAf(f)}} onAdmin={()=>setAdminView(true)}/>}</ThemeCtx.Provider>;
+  return<ThemeCtx.Provider value={{theme,toggle}}><style>{css}</style><InstallBanner/>{!user?<AuthScreen onLogin={login}/>:af?<Workspace family={af} user={user} onBack={()=>setAf(null)}/>:adminView?<AdminPanel user={user} onBack={()=>setAdminView(false)} onSelectFamily={f=>setAf(f)}/>:<Dashboard user={user} onLogout={logout} onSelectFamily={f=>setAf(f)} onCreateFamily={(u,f)=>{setUser(u);setAf(f)}} onAdmin={()=>setAdminView(true)}/>}</ThemeCtx.Provider>;
 }
