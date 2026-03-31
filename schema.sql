@@ -91,6 +91,23 @@ ALTER TABLE members ADD COLUMN nik TEXT DEFAULT '';
 -- Agama column (migration)
 ALTER TABLE members ADD COLUMN agama TEXT DEFAULT 'islam';
 
+-- Marriages table for polygamy support
+CREATE TABLE IF NOT EXISTS marriages (
+  id TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL,
+  husband_id TEXT NOT NULL,
+  wife_id TEXT NOT NULL,
+  marriage_order INTEGER DEFAULT 1,
+  marriage_date TEXT DEFAULT '',
+  divorce_date TEXT DEFAULT '',
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_marriages_family ON marriages(family_id);
+CREATE INDEX IF NOT EXISTS idx_marriages_husband ON marriages(husband_id);
+CREATE INDEX IF NOT EXISTS idx_marriages_wife ON marriages(wife_id);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_members_family ON members(family_id);
 CREATE INDEX IF NOT EXISTS idx_members_parent ON members(parent_id);

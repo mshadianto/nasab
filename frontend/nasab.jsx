@@ -112,13 +112,15 @@ const API={
   async me(){return(await this._f('/api/auth/me')).user},
   async getFamilies(){const d=await this._f('/api/families');return d.families.map(f=>({...f,myRole:f.my_role}))},
   async createFamily({name,description}){return(await this._f('/api/families',{method:'POST',body:JSON.stringify({name,description})})).family},
-  async getFamily(fid){const d=await this._f(`/api/families/${fid}`);return{...d.family,members:d.members.map(mFromAPI),positions:d.positions||{},stories:(d.stories||[]).map(s=>({id:s.id,text:s.text_content,personId:s.person_id,personName:s.person_name||'',author:s.author_name||'',date:s.created_at})),collaborators:(d.collaborators||[]).map(c=>({userId:c.user_id,name:c.name,role:c.role})),invites:d.invites||[],myRole:d.my_role}},
+  async getFamily(fid){const d=await this._f(`/api/families/${fid}`);return{...d.family,members:d.members.map(mFromAPI),positions:d.positions||{},stories:(d.stories||[]).map(s=>({id:s.id,text:s.text_content,personId:s.person_id,personName:s.person_name||'',author:s.author_name||'',date:s.created_at})),collaborators:(d.collaborators||[]).map(c=>({userId:c.user_id,name:c.name,role:c.role})),invites:d.invites||[],marriages:(d.marriages||[]).map(m=>({id:m.id,husbandId:m.husband_id,wifeId:m.wife_id,order:m.marriage_order||1,date:m.marriage_date||'',divorceDate:m.divorce_date||'',notes:m.notes||''})),myRole:d.my_role}},
   async addMember(fid,m){return this._f(`/api/families/${fid}/members`,{method:'POST',body:JSON.stringify(mToAPI(m))})},
   async updateMember(fid,mid,m){return this._f(`/api/families/${fid}/members/${mid}`,{method:'PUT',body:JSON.stringify(mToAPI(m))})},
   async deleteMember(fid,mid){return this._f(`/api/families/${fid}/members/${mid}`,{method:'DELETE'})},
   async savePositions(fid,positions){return this._f(`/api/families/${fid}/positions`,{method:'PUT',body:JSON.stringify({positions})})},
   async addStory(fid,s){return this._f(`/api/families/${fid}/stories`,{method:'POST',body:JSON.stringify({text:s.text,person_id:s.personId,person_name:s.personName})})},
   async deleteStory(fid,sid){return this._f(`/api/families/${fid}/stories/${sid}`,{method:'DELETE'})},
+  async addMarriage(fid,m){return this._f(`/api/families/${fid}/marriages`,{method:'POST',body:JSON.stringify(m)})},
+  async deleteMarriage(fid,mid){return this._f(`/api/families/${fid}/marriages/${mid}`,{method:'DELETE'})},
   async invite(fid,email,role){return this._f(`/api/families/${fid}/invite`,{method:'POST',body:JSON.stringify({email,role})})},
   async adminStats(){return this._f('/api/admin/stats')},
   async adminUsers(){return(await this._f('/api/admin/users')).users},
@@ -133,9 +135,11 @@ const API={
 const FE={
   ch:(pp,pid)=>pp.filter(p=>p.parentId===pid),
   sp:(pp,p)=>p.spouseId?pp.find(x=>x.id===p.spouseId)||null:null,
+  // All spouses via marriages table (polygamy). Falls back to spouseId if no marriages.
+  spouses:(pp,p,marriages=[])=>{const ms=marriages.filter(m=>m.husbandId===p.id||m.wifeId===p.id);if(ms.length){const sids=[...new Set(ms.map(m=>m.husbandId===p.id?m.wifeId:m.husbandId))];return sids.map(sid=>pp.find(x=>x.id===sid)).filter(Boolean)}return p.spouseId?[pp.find(x=>x.id===p.spouseId)].filter(Boolean):[]},
   pa:(pp,p)=>p.parentId?pp.find(x=>x.id===p.parentId)||null:null,
   sib:(pp,p)=>p.parentId?pp.filter(x=>x.parentId===p.parentId&&x.id!==p.id):[],
-  roots:(pp)=>pp.filter(p=>!p.parentId&&!pp.some(x=>x.spouseId===p.id&&x.parentId)),
+  roots:(pp,marriages=[])=>pp.filter(p=>!p.parentId&&!pp.some(x=>x.spouseId===p.id&&x.parentId)&&!marriages.some(m=>m.wifeId===p.id&&pp.find(h=>h.id===m.husbandId)?.parentId)),
   gen:(pp,pid,g=0)=>{const p=pp.find(x=>x.id===pid);return(!p||!p.parentId)?g:FE.gen(pp,p.parentId,g+1)},
   desc:(pp,pid)=>{const c=FE.ch(pp,pid);return c.reduce((s,x)=>s+1+FE.desc(pp,x.id),0)},
   age:(p)=>{if(!p.birthDate)return null;const b=new Date(p.birthDate),e=p.deathDate?new Date(p.deathDate):new Date();let a=e.getFullYear()-b.getFullYear();if(e.getMonth()<b.getMonth()||(e.getMonth()===b.getMonth()&&e.getDate()<b.getDate()))a--;return a},
@@ -154,22 +158,29 @@ const FE={
 };
 
 // ─── LAYOUT / CONNECTORS ─────────────────────────────────────
-function autoLayout(pp){const roots=pp.filter(p=>!p.parentId&&!pp.some(x=>x.spouseId===p.id&&x.parentId));const pos={};
-  function lay(pid,d){const p=pp.find(x=>x.id===pid);if(!p||pos[pid])return{x:0,w:0};const sp=FE.sp(pp,p);const ch=FE.ch(pp,pid);const cw=sp?CW*2+CG:CW;if(!ch.length){const y=d*(CH+GY);pos[pid]={x:0,y};if(sp&&!pos[sp.id])pos[sp.id]={x:CW+CG,y};return{x:0,w:cw}}const cls=[];let cur=0;ch.forEach(c=>{const cl=lay(c.id,d+1);cls.push({...cl,offset:cur});cur+=cl.w+GX});const tcw=cur-GX;const cx=(cls[0].offset+cls[cls.length-1].offset+cls[cls.length-1].w)/2-cw/2;const px=Math.max(0,cx);const y=d*(CH+GY);pos[pid]={x:px,y};if(sp&&!pos[sp.id])pos[sp.id]={x:px+CW+CG,y};const cbx=px+cw/2-tcw/2;ch.forEach((c,i)=>shift(c.id,cbx+cls[i].offset));return{x:Math.min(px,cbx),w:Math.max(px+cw,cbx+tcw)-Math.min(px,cbx)}}
-  function shift(pid,dx){if(!pos[pid])return;pos[pid].x+=dx;const sp=FE.sp(pp,pp.find(x=>x.id===pid));if(sp&&pos[sp.id])pos[sp.id].x+=dx;FE.ch(pp,pid).forEach(c=>shift(c.id,dx))}
-  let gc=0;roots.forEach(root=>{const r=lay(root.id,0);const sh=gc;const sa=pid=>{if(pos[pid])pos[pid].x+=sh;const sp=FE.sp(pp,pp.find(x=>x.id===pid));if(sp&&pos[sp.id])pos[sp.id].x+=sh;FE.ch(pp,pid).forEach(c=>sa(c.id))};sa(root.id);gc+=r.w+GX*3});
+function autoLayout(pp,marriages=[]){const roots=FE.roots(pp,marriages);const pos={};
+  function lay(pid,d){const p=pp.find(x=>x.id===pid);if(!p||pos[pid])return{x:0,w:0};const sps=FE.spouses(pp,p,marriages);const ch=FE.ch(pp,pid);const spCount=sps.filter(s=>!pos[s.id]).length;const cw=CW+(spCount*(CW+CG));if(!ch.length){const y=d*(CH+GY);pos[pid]={x:0,y};let sx=CW+CG;sps.forEach(s=>{if(!pos[s.id]){pos[s.id]={x:sx,y};sx+=CW+CG}});return{x:0,w:cw}}const cls=[];let cur=0;ch.forEach(c=>{const cl=lay(c.id,d+1);cls.push({...cl,offset:cur});cur+=cl.w+GX});const tcw=cur-GX;const cx=(cls[0].offset+cls[cls.length-1].offset+cls[cls.length-1].w)/2-cw/2;const px=Math.max(0,cx);const y=d*(CH+GY);pos[pid]={x:px,y};let sx=px+CW+CG;sps.forEach(s=>{if(!pos[s.id]){pos[s.id]={x:sx,y};sx+=CW+CG}});const cbx=px+cw/2-tcw/2;ch.forEach((c,i)=>shift(c.id,cbx+cls[i].offset));return{x:Math.min(px,cbx),w:Math.max(px+cw,cbx+tcw)-Math.min(px,cbx)}}
+  function shift(pid,dx){if(!pos[pid])return;pos[pid].x+=dx;const sps=FE.spouses(pp,pp.find(x=>x.id===pid),marriages);sps.forEach(s=>{if(pos[s.id])pos[s.id].x+=dx});FE.ch(pp,pid).forEach(c=>shift(c.id,dx))}
+  let gc=0;roots.forEach(root=>{const r=lay(root.id,0);const sh=gc;const sa=pid=>{if(pos[pid])pos[pid].x+=sh;const sps=FE.spouses(pp,pp.find(x=>x.id===pid),marriages);sps.forEach(s=>{if(pos[s.id])pos[s.id].x+=sh});FE.ch(pp,pid).forEach(c=>sa(c.id))};sa(root.id);gc+=r.w+GX*3});
   let mx=Infinity,my=Infinity;Object.values(pos).forEach(p=>{mx=Math.min(mx,p.x);my=Math.min(my,p.y)});Object.values(pos).forEach(p=>{p.x-=mx-100;p.y-=my-80});return pos}
 const REL_LABELS=["Anak","Cucu","Cicit","Canggah","Wareng"];
-function getConns(pp,pos){const L=[];pp.forEach(p=>{const ps=pos[p.id];if(!ps)return;const sp=FE.sp(pp,p);
-  // Spouse connector
-  if(sp&&pos[sp.id]&&p.id<sp.id){const lbl=p.gender==="male"?`SUAMI ∞ ISTRI`:`ISTRI ∞ SUAMI`;L.push({t:"sp",x1:ps.x+CW,y1:ps.y+CH/2,x2:pos[sp.id].x,y2:ps.y+CH/2,label:lbl})}
-  // Parent→child connectors
-  const ch=FE.ch(pp,p.id);if(ch.length){const pg=FE.gen(pp,p.id);const cw=sp&&pos[sp.id]?(pos[sp.id].x+CW-ps.x):CW;const pcx=ps.x+cw/2,pb=ps.y+CH;
-    const ct=ch.map(c=>{const cp=pos[c.id];if(!cp)return null;const cs=FE.sp(pp,c);const ccw=cs&&pos[cs.id]?(pos[cs.id].x+CW-cp.x):CW;return{cx:cp.x+ccw/2,y:cp.y,name:c.name,gender:c.gender}}).filter(Boolean);
-    if(ct.length){const my=pb+GY/2;const rl=REL_LABELS[pg]||`Gen ${pg+2}`;const cnt=ct.length;
-      L.push({t:"pd",x1:pcx,y1:pb,x2:pcx,y2:my,label:`${cnt} ${rl}`,count:cnt});
-      if(ct.length>1)L.push({t:"br",x1:Math.min(...ct.map(c=>c.cx)),y1:my,x2:Math.max(...ct.map(c=>c.cx)),y2:my});
-      ct.forEach(c=>L.push({t:"cd",x1:c.cx,y1:my,x2:c.cx,y2:c.y,name:c.name,gender:c.gender}))}}});return L}
+function getConns(pp,pos,marriages=[]){const L=[];const drawnSp=new Set();
+  // Draw spouse connectors from marriages + fallback to spouseId
+  pp.forEach(p=>{const ps=pos[p.id];if(!ps)return;
+    const sps=FE.spouses(pp,p,marriages);
+    sps.forEach(sp=>{if(!pos[sp.id])return;const k=[p.id,sp.id].sort().join("_");if(drawnSp.has(k))return;drawnSp.add(k);
+      const mar=marriages.find(m=>(m.husbandId===p.id&&m.wifeId===sp.id)||(m.husbandId===sp.id&&m.wifeId===p.id));
+      const ord=mar?mar.order:1;const lbl=ord>1?`NIKAH #${ord}`:"NIKAH";
+      L.push({t:"sp",x1:Math.min(ps.x,pos[sp.id].x)+CW,y1:ps.y+CH/2,x2:Math.max(ps.x,pos[sp.id].x),y2:pos[sp.id].y+CH/2,label:lbl,order:ord})});
+    // Parent→child connectors
+    const ch=FE.ch(pp,p.id);if(ch.length){const pg=FE.gen(pp,p.id);
+      const allSps=sps.filter(s=>pos[s.id]);const rightmost=allSps.length?Math.max(ps.x,...allSps.map(s=>pos[s.id].x))+CW:ps.x+CW;
+      const cw=rightmost-ps.x;const pcx=ps.x+cw/2,pb=ps.y+CH;
+      const ct=ch.map(c=>{const cp=pos[c.id];if(!cp)return null;const csps=FE.spouses(pp,c,marriages).filter(s=>pos[s.id]);const cr=csps.length?Math.max(cp.x,...csps.map(s=>pos[s.id].x))+CW:cp.x+CW;return{cx:(cp.x+cr)/2,y:cp.y,name:c.name,gender:c.gender}}).filter(Boolean);
+      if(ct.length){const my=pb+GY/2;const rl=REL_LABELS[pg]||`Gen ${pg+2}`;const cnt=ct.length;
+        L.push({t:"pd",x1:pcx,y1:pb,x2:pcx,y2:my,label:`${cnt} ${rl}`,count:cnt});
+        if(ct.length>1)L.push({t:"br",x1:Math.min(...ct.map(c=>c.cx)),y1:my,x2:Math.max(...ct.map(c=>c.cx)),y2:my});
+        ct.forEach(c=>L.push({t:"cd",x1:c.cx,y1:my,x2:c.cx,y2:c.y,name:c.name,gender:c.gender}))}}});return L}
 
 // ─── SEED DATA ───────────────────────────────────────────────
 const SEED=(()=>{const I={a:"p_s1",b:"p_s2",c:"p_s3",d:"p_s4",e:"p_s5",f:"p_s6",g:"p_s7",h:"p_s8",i:"p_s9",j:"p_s10",k:"p_s11",l:"p_s12",m:"p_s13",n:"p_s14",o:"p_s15",p:"p_s16",q:"p_s17",r:"p_s18",s:"p_s19",t:"p_s20",u:"p_s21",v:"p_s22",w:"p_s23",x:"p_s24",y:"p_s25",z:"p_s26",aa:"p_s27"};const P=(id,nm,gn,pid,sid,nt="",loc=null)=>({id,name:nm,gender:gn,birthDate:"",deathDate:"",birthPlace:loc?loc.address:"",photo:"",notes:nt,parentId:pid,spouseId:sid,location:loc,createdAt:"2024-01-01"});const S={lat:-0.4948,lng:117.1436,address:"Samarinda, Kaltim"},C={lat:-6.354,lng:106.743,address:"Ciputat, Tangsel"};return[P(I.a,"HM Syachroel AP","male",null,I.b,"Kepala Keluarga",S),P(I.b,"Hj. Djahora","female",null,I.a,"Ibu Keluarga",S),P(I.c,"Isnawati","female",I.a,I.d,"Anak ke-1",S),P(I.d,"Abdul Kadir Saro","male",null,I.c,"Suami Isnawati",S),P(I.e,"M Fakhruddin","male",I.a,I.f,"Anak ke-2",S),P(I.f,"Ertika Sari","female",null,I.e,"Istri Fakhruddin",S),P(I.g,"Budiana","female",I.a,I.h,"Anak ke-3",S),P(I.h,"Fadlan","male",null,I.g,"Suami Budiana",S),P(I.i,"M Sopian Hadianto","male",I.a,I.j,"Anak ke-4 • GRC Expert & AI Builder",C),P(I.j,"Susilowati","female",null,I.i,"Istri Sopian",C),P(I.k,"M. Firmansyah","male",I.a,I.l,"Anak ke-5",S),P(I.l,"Rissa","female",null,I.k,"Istri Firmansyah",S),P(I.m,"M Reza Fahlevi","male",I.a,I.n,"Anak ke-6",S),P(I.n,"Amy","female",null,I.m,"Istri Reza",S),P(I.o,"Aulia Rahman","male",I.c,null,"Cucu",S),P(I.p,"Abdul Haris","male",I.c,null,"Cucu",S),P(I.q,"Annisa Salsabila","female",I.e,null,"Cucu",S),P(I.r,"M Rayhan","male",I.e,null,"Cucu",S),P(I.s,"Syifa","female",I.e,null,"Cucu",S),P(I.t,"Khalisa NF Shasie","female",I.i,null,"Cucu",C),P(I.u,"Athallah Lintang Ahmad","male",I.i,null,"Cucu",C),P(I.v,"Syakira Alma Kinanti","female",I.i,null,"Cucu",C),P(I.w,"Kaylila Syafira","female",I.k,null,"Cucu",S),P(I.x,"Al Gazel","male",I.k,null,"Cucu",S),P(I.y,"Al Syameera","female",I.k,null,"Cucu",S),P(I.z,"Caca","female",I.m,null,"Cucu",S),P(I.aa,"Fia","female",I.m,null,"Cucu",S)]})();
@@ -775,10 +786,10 @@ function Dashboard({user,onSelectFamily,onLogout,onCreateFamily,onAdmin}){
 // WORKSPACE — All views
 // ═══════════════════════════════════════════════════════════════
 function Workspace({family:initFam,user,onBack}){
-  const [fam,setFam]=useState(initFam);const pp=fam.members||[];const [pos,setPos]=useState(fam.positions||{});const[loading,setLoading]=useState(!initFam.members);
+  const [fam,setFam]=useState(initFam);const pp=fam.members||[];const mrs=fam.marriages||[];const [pos,setPos]=useState(fam.positions||{});const[loading,setLoading]=useState(!initFam.members);
   const [vw,setVw]=useState(VW.CANVAS);const [search,setSearch]=useState("");const [sel,setSel]=useState(null);
   const [showForm,setShowForm]=useState(false);const [editP,setEditP]=useState(null);const [showShare,setShowShare]=useState(false);
-  const [showIE,setShowIE]=useState(false);const [showFar,setShowFar]=useState(false);const [toast,setToast]=useState(null);const [filters,setFilters]=useState({});
+  const [showIE,setShowIE]=useState(false);const [showFar,setShowFar]=useState(false);const [showMar,setShowMar]=useState(false);const [toast,setToast]=useState(null);const [filters,setFilters]=useState({});
   const myRole=(fam.collaborators||[]).find(c=>c.userId===user.id)?.role||RL.VIEWER;const canEdit=myRole===RL.OWNER||myRole===RL.EDITOR;
   const flash=m=>{setToast(m);setTimeout(()=>setToast(null),3000)};
   const reloadFam=async()=>{try{const d=await API.getFamily(fam.id);setFam(d);setPos(d.positions||{})}catch{}};
@@ -803,6 +814,7 @@ function Workspace({family:initFam,user,onBack}){
         <div className="sbox"><Ic.Search/><input placeholder="Cari..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
         <button className="btn btn-sm" onClick={()=>setShowShare(true)}><Ic.Share/></button>
         <ThemeBtn/>
+        {canEdit&&<button className="btn btn-sm" onClick={()=>setShowMar(true)} title="Kelola Pernikahan" style={{fontSize:11}}>💍</button>}
         <button className="btn btn-sm" onClick={()=>setShowFar(true)} title="Kalkulator Faraidh" style={{fontSize:11}}>⚖️</button>
         <button className="btn btn-sm" onClick={()=>setShowIE(true)}><Ic.DL/></button>
         {!pp.length&&<button className="btn btn-sm" onClick={loadDemo}>Demo</button>}
@@ -810,24 +822,25 @@ function Workspace({family:initFam,user,onBack}){
       </div>
     </header>
     <div style={{flex:1,position:"relative",overflow:"hidden"}}>
-      {vw===VW.CANVAS&&<CanvasView pp={viewPP} onSel={setSel} selId={sel?.id} onPos={updPos} savedPos={pos}/>}
+      {vw===VW.CANVAS&&<CanvasView pp={viewPP} marriages={mrs} onSel={setSel} selId={sel?.id} onPos={updPos} savedPos={pos}/>}
       {vw===VW.MAP&&<MapView pp={viewPP} onSel={setSel}/>}
       {vw===VW.LIST&&<div style={{height:"100%",overflow:"auto"}}><div style={{maxWidth:800,margin:"0 auto",padding:"16px 16px 0"}}><FilterBar pp={pp} filters={filters} setFilters={setFilters}/></div><ListView pp={Object.keys(filters).length?FE.filter(viewPP,filters):viewPP} allPP={pp} onSel={setSel}/></div>}
       {vw===VW.STATS&&<div style={{height:"100%",overflow:"auto"}}><StatsView pp={viewPP}/></div>}
       {vw===VW.TIMELINE&&<div style={{height:"100%",overflow:"auto"}}><TimelineView pp={viewPP} onSel={setSel}/></div>}
       {vw===VW.INSIGHTS&&<InsightsView pp={pp} fam={fam} canEdit={canEdit} onSaveFam={reloadFam} flash={flash}/>}
-      {sel&&<Sidebar p={sel} pp={pp} canEdit={canEdit} onClose={()=>setSel(null)} onEdit={p=>{setSel(null);setEditP(p);setShowForm(true)}} onDel={handleDel} onSel={setSel}/>}
+      {sel&&<Sidebar p={sel} pp={pp} marriages={mrs} canEdit={canEdit} onClose={()=>setSel(null)} onEdit={p=>{setSel(null);setEditP(p);setShowForm(true)}} onDel={handleDel} onSel={setSel}/>}
     </div>
     {showForm&&canEdit&&<PersonForm person={editP} pp={pp} onSave={handleSave} onClose={()=>{setShowForm(false);setEditP(null)}}/>}
     {showShare&&<ShareModal fam={fam} user={user} onClose={()=>setShowShare(false)} onUpd={reloadFam} flash={flash}/>}
     {showIE&&<IEModal pp={pp} onImport={async d=>{try{for(const m of d){await API.addMember(fam.id,m)}await reloadFam();flash("Data diimport")}catch(e){flash(e.message)}}} onClose={()=>setShowIE(false)}/>}
     {showFar&&<FaraidhCalc pp={pp} onClose={()=>setShowFar(false)}/>}
+    {showMar&&<MarriageModal pp={pp} marriages={mrs} fam={fam} onClose={()=>setShowMar(false)} onSave={reloadFam} flash={flash}/>}
     {toast&&<div className="toast">{toast}</div>}
   </div>);
 }
 
 // ─── CANVAS ──────────────────────────────────────────────────
-function CanvasView({pp,onSel,selId,onPos,savedPos}){
+function CanvasView({pp,marriages=[],onSel,selId,onPos,savedPos}){
   const wr=useRef(null);const[pos,setPos]=useState({});const[pan,setPan]=useState({x:0,y:0});const[zm,setZm]=useState(.5);
   const[drag,setDrag]=useState(null);const[panning,setPanning]=useState(false);const[didD,setDidD]=useState(false);
   const ps=useRef({});const ds=useRef({});const fitted=useRef(false);const pinch=useRef(null);
@@ -858,13 +871,13 @@ function CanvasView({pp,onSel,selId,onPos,savedPos}){
   },[pp]);
   useEffect(()=>{
     let p;
-    if(savedPos&&Object.keys(savedPos).length>=pp.length){p=savedPos}else{p=autoLayout(pp);onPos(p)}
+    if(savedPos&&Object.keys(savedPos).length>=pp.length){p=savedPos}else{p=autoLayout(pp,marriages);onPos(p)}
     setPos(p);
     fitted.current=false;
     requestAnimationFrame(()=>requestAnimationFrame(()=>{comfortView(p);fitted.current=true}));
   },[pp]);
   useEffect(()=>{if(fitted.current&&Object.keys(pos).length>0)onPos(pos)},[pos]);
-  const conns=useMemo(()=>getConns(pp,pos),[pp,pos]);
+  const conns=useMemo(()=>getConns(pp,pos,marriages),[pp,pos,marriages]);
   const bnd=useMemo(()=>{let mx=0,my=0;Object.values(pos).forEach(p=>{mx=Math.max(mx,p.x+CW+200);my=Math.max(my,p.y+CH+200)});return{w:Math.max(mx,2000),h:Math.max(my,1200)}},[pos]);
   const gls=useMemo(()=>{const l={};pp.forEach(p=>{const g=FE.gen(pp,p.id);const po=pos[p.id];if(!po)return;if(!l[g])l[g]={mi:po.y,mx:po.y+CH};l[g].mi=Math.min(l[g].mi,po.y);l[g].mx=Math.max(l[g].mx,po.y+CH)});return l},[pp,pos]);
   const cx=e=>e.touches?e.touches[0].clientX:e.clientX;const cy=e=>e.touches?e.touches[0].clientY:e.clientY;
@@ -883,7 +896,7 @@ function CanvasView({pp,onSel,selId,onPos,savedPos}){
   const lastTap=useRef(0);
   const dblZoom=useCallback((e,p)=>{const el=wr.current;if(!el)return;const vw=el.clientWidth,vh=el.clientHeight;const pt=pos[p.id];if(!pt)return;const nz=zm<0.5?0.7:zm<0.8?1:0.45;const tcx=pt.x+CW/2,tcy=pt.y+CH/2;setZm(nz);setPan({x:vw/2-tcx*nz,y:vh/2-tcy*nz})},[pos,zm]);
   const handleCardClick=(e,p)=>{e.stopPropagation();if(didD)return;const now=Date.now();if(now-lastTap.current<350){dblZoom(e,p);lastTap.current=0}else{lastTap.current=now;onSel(p)}};
-  const fit=()=>{const a=autoLayout(pp);setPos(a);onPos(a);requestAnimationFrame(()=>fitAll(a))};
+  const fit=()=>{const a=autoLayout(pp,marriages);setPos(a);onPos(a);requestAnimationFrame(()=>fitAll(a))};
   if(!pp.length)return<div className="empty"><h3>Mulai dari sini</h3><p>Tambahkan anggota pertama atau muat data demo</p></div>;
   return(<div ref={wr} className={`cvs ${panning?"grabbing":""}`} onMouseDown={onPS} onTouchStart={onPS}>
     <div className="cvs-inner" style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zm})`,width:bnd.w,height:bnd.h}}>
@@ -953,10 +966,10 @@ function InsightsView({pp,fam,canEdit,onSaveFam,flash}){const[fid,setFid]=useSta
     <div className="ins-c"><h3><span>⚡</span>Fakta</h3>{(()=>{const s=FE.stats(pp);const mc=pp.reduce((b,p)=>{const c=FE.ch(pp,p.id).length;return c>b.c?{p,c}:b},{p:null,c:0});const md=pp.reduce((b,p)=>{const d=FE.desc(pp,p.id);return d>b.c?{p,c:d}:b},{p:null,c:0});return<div style={{fontSize:11,lineHeight:2,color:"var(--t2)"}}>{pp.length?`${((s.males/pp.length)*100).toFixed(0)}% laki-laki`:""}<br/>{pp.length?`${((s.geotagged/pp.length)*100).toFixed(0)}% geotagged`:""}<br/>{mc.p&&<>🏆 {mc.p.name}: {mc.c} anak<br/></>}{md.p&&<>🌳 {md.p.name}: {md.c} keturunan<br/></>}{ld.length} kota</div>})()}</div>
     <div className="ins-c ins-cf"><h3><span>📖</span>Cerita Keluarga</h3>{canEdit&&<div style={{marginBottom:10}}><div style={{display:"flex",gap:5,marginBottom:5}}><select className="fsel" value={sp} onChange={e=>setSp(e.target.value)} style={{width:160,fontSize:10}}><option value="">Cerita umum</option>{pp.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><button className="btn btn-p btn-sm" onClick={addS} disabled={!st.trim()}>Simpan</button></div><textarea className="fta" value={st} onChange={e=>setSt(e.target.value)} placeholder="Tulis cerita, kenangan, pesan..." style={{minHeight:40}}/></div>}{!stories.length?<div style={{fontSize:11,color:"var(--t3)",textAlign:"center",padding:16}}>Belum ada cerita</div>:stories.map(s=><div key={s.id} className="st-entry"><div className="st-date">{new Date(s.date).toLocaleDateString("id-ID",{year:"numeric",month:"short",day:"numeric"})}{s.personName&&` · ${s.personName}`}</div><div className="st-text">{s.text}</div><div className="st-author">— {s.author}</div></div>)}</div>
   </div></div>)}
-function Sidebar({p,pp,canEdit,onClose,onEdit,onDel,onSel}){const pa=FE.pa(pp,p);const sp=FE.sp(pp,p);const ch=FE.ch(pp,p.id);const sib=FE.sib(pp,p);const g=FE.gen(pp,p.id);const d=FE.desc(pp,p.id);const gl=GL[g]||{l:`Gen ${g+1}`};const age=FE.age(p);const ctx=useMemo(()=>{const c=[];if(pa)c.push(`Anak ${pa.name}`);if(sp)c.push(`∞ ${sp.name}`);if(ch.length)c.push(`${ch.length} anak`);return c.join(" · ")},[pa,sp,ch]);
+function Sidebar({p,pp,marriages=[],canEdit,onClose,onEdit,onDel,onSel}){const pa=FE.pa(pp,p);const sps=FE.spouses(pp,p,marriages);const sp=sps[0]||null;const ch=FE.ch(pp,p.id);const sib=FE.sib(pp,p);const g=FE.gen(pp,p.id);const d=FE.desc(pp,p.id);const gl=GL[g]||{l:`Gen ${g+1}`};const age=FE.age(p);const ctx=useMemo(()=>{const c=[];if(pa)c.push(`Anak ${pa.name}`);if(sps.length===1)c.push(`∞ ${sps[0].name}`);else if(sps.length>1)c.push(`∞ ${sps.length} pasangan`);if(ch.length)c.push(`${ch.length} anak`);return c.join(" · ")},[pa,sps,ch]);
   const[showNik,setShowNik]=useState(false);
   return(<div className="sb" onClick={e=>e.stopPropagation()}><div className="sb-h"><h3>Detail</h3><button className="btn btn-icon btn-ghost" onClick={onClose}><Ic.X/></button></div><div className="sb-b"><div className={`sb-av ${p.gender}`}>{ini(p.name)}</div><div className="sb-nm">{p.name}</div><div className="sb-sub">{p.gender==="male"?"♂":"♀"} · {gl.l}{p.deathDate?" · Alm.":""} · {(p.agama||"islam").charAt(0).toUpperCase()+(p.agama||"islam").slice(1)}</div>{ctx&&<div className="sb-ctx">{ctx}</div>}<div className="sb-sec"><div className="sb-sec-t">Info</div>{p.nik&&<div className="sb-row"><span className="sb-row-l">🆔 NIK</span><span className="sb-row-v"><span className="nik-masked" onClick={()=>setShowNik(!showNik)} style={{cursor:"pointer"}} title="Klik untuk tampilkan/sembunyikan">{showNik?NIK.format(p.nik):NIK.mask(p.nik)}</span></span></div>}{p.birthDate&&<div className="sb-row"><span className="sb-row-l">Lahir</span><span className="sb-row-v">{new Date(p.birthDate).toLocaleDateString("id-ID",{year:"numeric",month:"long",day:"numeric"})}</span></div>}{age!==null&&<div className="sb-row"><span className="sb-row-l">Usia</span><span className="sb-row-v">{age} th</span></div>}{p.location?.lat&&<div className="sb-row"><span className="sb-row-l">📍</span><span className="sb-row-v">{p.location.address||`${p.location.lat.toFixed(3)},${p.location.lng.toFixed(3)}`}</span></div>}<div className="sb-row"><span className="sb-row-l">Keturunan</span><span className="sb-row-v">{d}</span></div>{p.notes&&<div className="sb-row"><span className="sb-row-l">Catatan</span><span className="sb-row-v">{p.notes}</span></div>}</div>
-    <div className="sb-sec"><div className="sb-sec-t">Hubungan</div>{pa&&<div className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(pa),50)}}><span className="sb-rel-t">PARENT</span>{pa.name}</div>}{sp&&<div className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(sp),50)}}><span className="sb-rel-t" style={{color:"var(--rose)"}}>SPOUSE</span>{sp.name}</div>}{sib.map(s=><div key={s.id} className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(s),50)}}><span className="sb-rel-t" style={{color:"var(--purple)"}}>SIBLING</span>{s.name}</div>)}{ch.map(c=><div key={c.id} className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(c),50)}}><span className="sb-rel-t" style={{color:"var(--pri)"}}>CHILD</span>{c.name}</div>)}</div></div>
+    <div className="sb-sec"><div className="sb-sec-t">Hubungan</div>{pa&&<div className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(pa),50)}}><span className="sb-rel-t">PARENT</span>{pa.name}</div>}{sps.map((s,i)=>{const mar=marriages.find(m=>(m.husbandId===p.id&&m.wifeId===s.id)||(m.husbandId===s.id&&m.wifeId===p.id));return<div key={s.id} className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(s),50)}}><span className="sb-rel-t" style={{color:"var(--rose)"}}>{sps.length>1?`ISTRI ${mar?.order||i+1}`:"SPOUSE"}</span>{s.name}</div>})}{sib.map(s=><div key={s.id} className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(s),50)}}><span className="sb-rel-t" style={{color:"var(--purple)"}}>SIBLING</span>{s.name}</div>)}{ch.map(c=><div key={c.id} className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(c),50)}}><span className="sb-rel-t" style={{color:"var(--pri)"}}>CHILD</span>{c.name}</div>)}</div></div>
     {canEdit&&<div className="sb-ft"><button className="btn btn-d btn-sm" onClick={()=>onDel(p.id)}><Ic.Trash/></button><button className="btn btn-p btn-sm" onClick={()=>onEdit(p)}><Ic.Edit/> Edit</button></div>}</div>)}
 function ListView({pp,allPP,onSel}){const people=allPP||pp;return(<div className="lv">{[...pp].sort((a,b)=>FE.gen(people,a.id)-FE.gen(people,b.id)||a.name.localeCompare(b.name)).map(p=>{const g=FE.gen(people,p.id);const gl=GL[g]||{l:`Gen ${g+1}`};const c=GC[g%GC.length];return<div key={p.id} className="li" onClick={()=>onSel(p)}><div className={`li-av ${p.gender}`}>{ini(p.name)}</div><div className="li-info"><h4>{p.name}</h4><p>{p.location?.address||p.notes||"—"}</p></div><span className="li-badge" style={{background:c+"18",color:c,border:`1px solid ${c}30`}}>{gl.l}</span></div>})}</div>)}
 function StatsView({pp}){const s=useMemo(()=>FE.stats(pp),[pp]);return<div className="sg">{[{l:"Total",v:s.total,c:"var(--pri)"},{l:"Laki-laki",v:s.males,c:"var(--male-t)"},{l:"Perempuan",v:s.females,c:"var(--fem-t)"},{l:"Hidup",v:s.living,c:"var(--pri)"},{l:"Almarhum",v:s.deceased,c:"var(--t3)"},{l:"Generasi",v:s.generations,c:"var(--warn)"},{l:"Geotagged",v:s.geotagged,c:"var(--orange)"},{l:"Avg Anak",v:s.avgChildren,c:"var(--purple)"}].map((c,i)=><div key={i} className="sc"><div className="sc-v" style={{color:c.c}}>{c.v}</div><div className="sc-l">{c.l}</div></div>)}</div>}
@@ -1010,6 +1023,35 @@ function FaraidhCalc({pp,onClose}){
     </div>:results.faraidh&&results.faraidh.length>0?<FaraidhResultTable results={results.faraidh} total={total} fmt={fmt} label="Pembagian Waris"/>:<div style={{textAlign:"center",padding:20,color:"var(--t3)",fontSize:12}}>Tambahkan ahli waris untuk melihat perhitungan</div>}
     <div style={{marginTop:14,padding:"8px 10px",background:"var(--bg2)",borderRadius:6,fontSize:9,color:"var(--t3)",lineHeight:1.6,fontFamily:"var(--f-mono)"}}>⚖️ Disclaimer: Kalkulator ini menggunakan hukum faraidh dasar + wasiat wajibah (KHI Pasal 209). Untuk kasus kompleks (wasiat, hutang, dll), konsultasikan dengan ahli waris/ulama.</div>
   </div></div></div>)}
+// ─── MARRIAGE MODAL ──────────────────────────────────────────
+function MarriageModal({pp,marriages,fam,onClose,onSave,flash}){
+  const[hid,setHid]=useState("");const[wid,setWid]=useState("");const[ord,setOrd]=useState(1);const[mDate,setMDate]=useState("");const[busy,setBusy]=useState(false);
+  const males=pp.filter(p=>p.gender==="male");const females=pp.filter(p=>p.gender==="female");
+  const add=async()=>{if(!hid||!wid){flash("Pilih suami dan istri");return}setBusy(true);try{await API.addMarriage(fam.id,{husband_id:hid,wife_id:wid,marriage_order:ord,marriage_date:mDate});flash("Pernikahan ditambahkan");onSave();setHid("");setWid("");setOrd(1);setMDate("")}catch(e){flash(e.message)}setBusy(false)};
+  const del=async(mid)=>{if(!confirm("Hapus pernikahan ini?"))return;try{await API.deleteMarriage(fam.id,mid);flash("Pernikahan dihapus");onSave()}catch(e){flash(e.message)}};
+  return<div className="modal-ov" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:520}}><div className="m-hdr"><h2>💍 Kelola Pernikahan</h2><button className="btn btn-icon btn-ghost" onClick={onClose}><Ic.X/></button></div><div className="m-body">
+    <div style={{fontSize:10,color:"var(--t3)",marginBottom:12,lineHeight:1.6}}>Dukung poligami — satu suami bisa memiliki beberapa istri. Setiap pernikahan ditampilkan sebagai konektor terpisah di canvas.</div>
+    <div style={{fontSize:10,fontWeight:600,color:"var(--t2)",marginBottom:6}}>Tambah Pernikahan</div>
+    <div className="fr" style={{marginBottom:8}}>
+      <div className="fg"><label className="fl">Suami</label><select className="fsel" value={hid} onChange={e=>setHid(e.target.value)}><option value="">— Pilih —</option>{males.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
+      <div className="fg"><label className="fl">Istri</label><select className="fsel" value={wid} onChange={e=>setWid(e.target.value)}><option value="">— Pilih —</option>{females.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
+    </div>
+    <div className="fr" style={{marginBottom:8}}>
+      <div className="fg"><label className="fl">Pernikahan ke-</label><input className="fi" type="number" min={1} max={4} value={ord} onChange={e=>setOrd(parseInt(e.target.value)||1)}/></div>
+      <div className="fg"><label className="fl">Tanggal Nikah</label><input className="fi" type="date" value={mDate} onChange={e=>setMDate(e.target.value)}/></div>
+    </div>
+    <button className="btn btn-p btn-sm" onClick={add} disabled={busy||!hid||!wid}>{busy?"Memproses...":"Tambah Pernikahan"}</button>
+    {marriages.length>0&&<div style={{marginTop:16}}><div style={{fontSize:10,fontWeight:600,color:"var(--t2)",marginBottom:6}}>Daftar Pernikahan ({marriages.length})</div>
+      {marriages.map(m=>{const h=pp.find(x=>x.id===m.husbandId);const w=pp.find(x=>x.id===m.wifeId);return<div key={m.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 9px",background:"var(--bg2)",borderRadius:"var(--rs)",marginBottom:4,fontSize:11}}>
+        <span style={{color:"var(--male-t)"}}>♂ {h?.name||"?"}</span>
+        <span style={{color:"var(--rose)",fontSize:9,fontWeight:700}}>∞ #{m.order}</span>
+        <span style={{color:"var(--fem-t)"}}>♀ {w?.name||"?"}</span>
+        {m.date&&<span style={{fontSize:8,color:"var(--t3)",fontFamily:"var(--f-mono)"}}>{m.date}</span>}
+        <button className="btn btn-sm btn-d" onClick={()=>del(m.id)} style={{marginLeft:"auto",padding:"2px 6px",fontSize:9}}>Hapus</button>
+      </div>})}
+    </div>}
+  </div></div></div>}
+
 // ─── GEDCOM CONVERTER ────────────────────────────────────────
 const GEDCOM={
   // Export members to GEDCOM 5.5.1

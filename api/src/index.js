@@ -131,21 +131,22 @@ export default {
         const user = await getAuthUser(request, DB);
         if (!user) return err('Unauthorized', 401);
         const fid = famMatch[1];
-        const [collab, family, membersR, collabsR, storiesR, posR, invitesR] = await Promise.all([
+        const [collab, family, membersR, collabsR, storiesR, posR, invitesR, marriagesR] = await Promise.all([
           DB.prepare('SELECT * FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first(),
           DB.prepare('SELECT * FROM families WHERE id = ?').bind(fid).first(),
           DB.prepare('SELECT * FROM members WHERE family_id = ? ORDER BY created_at').bind(fid).all(),
           DB.prepare('SELECT fc.*, u.name, u.email FROM family_collaborators fc JOIN users u ON fc.user_id = u.id WHERE fc.family_id = ?').bind(fid).all(),
           DB.prepare('SELECT * FROM stories WHERE family_id = ? ORDER BY created_at DESC').bind(fid).all(),
           DB.prepare('SELECT * FROM canvas_positions WHERE family_id = ?').bind(fid).all(),
-          DB.prepare('SELECT * FROM invites WHERE family_id = ?').bind(fid).all()
+          DB.prepare('SELECT * FROM invites WHERE family_id = ?').bind(fid).all(),
+          DB.prepare('SELECT * FROM marriages WHERE family_id = ? ORDER BY marriage_order').bind(fid).all()
         ]);
         if (!collab && !isAdmin(user)) return err('Akses ditolak', 403);
         if (!family) return err('Tidak ditemukan', 404);
         const posMap = {};
         posR.results.forEach(p => { posMap[p.member_id] = { x: p.x, y: p.y }; });
         const my_role = collab ? collab.role : (isSuperAdmin(user) ? 'owner' : 'viewer');
-        return json({ family, members: membersR.results, collaborators: collabsR.results, stories: storiesR.results, positions: posMap, invites: invitesR.results, my_role });
+        return json({ family, members: membersR.results, collaborators: collabsR.results, stories: storiesR.results, positions: posMap, invites: invitesR.results, marriages: marriagesR.results, my_role });
       }
 
       // ── MEMBERS CRUD ──
@@ -194,6 +195,36 @@ export default {
         await DB.prepare('DELETE FROM members WHERE id = ? AND family_id = ?').bind(mid, fid).run();
         await DB.prepare('DELETE FROM canvas_positions WHERE member_id = ? AND family_id = ?').bind(mid, fid).run();
         return json({ message: 'Dihapus' });
+      }
+
+      // ── MARRIAGES ──
+      const marPath = path.match(/^\/api\/families\/([^/]+)\/marriages$/);
+      if (marPath && method === 'POST') {
+        const user = await getAuthUser(request, DB);
+        if (!user) return err('Unauthorized', 401);
+        const fid = marPath[1];
+        const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
+        if (!isSuperAdmin(user) && (!collab || collab.role === 'viewer')) return err('Tidak punya izin', 403);
+        const m = await request.json();
+        if (!m.husband_id || !m.wife_id) return err('Husband dan wife wajib');
+        const id = 'm_' + uid();
+        const order = m.marriage_order || 1;
+        await DB.prepare('INSERT INTO marriages (id, family_id, husband_id, wife_id, marriage_order, marriage_date, divorce_date, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(id, fid, m.husband_id, m.wife_id, order, m.marriage_date || '', m.divorce_date || '', m.notes || '').run();
+        // Auto-link spouse_id on both members if not already set
+        const husband = await DB.prepare('SELECT spouse_id FROM members WHERE id = ? AND family_id = ?').bind(m.husband_id, fid).first();
+        const wife = await DB.prepare('SELECT spouse_id FROM members WHERE id = ? AND family_id = ?').bind(m.wife_id, fid).first();
+        if (husband && !husband.spouse_id) await DB.prepare('UPDATE members SET spouse_id = ? WHERE id = ? AND family_id = ?').bind(m.wife_id, m.husband_id, fid).run();
+        if (wife && !wife.spouse_id) await DB.prepare('UPDATE members SET spouse_id = ? WHERE id = ? AND family_id = ?').bind(m.husband_id, m.wife_id, fid).run();
+        return json({ id, message: 'Pernikahan ditambahkan' }, 201);
+      }
+
+      const marDel = path.match(/^\/api\/families\/([^/]+)\/marriages\/([^/]+)$/);
+      if (marDel && method === 'DELETE') {
+        const user = await getAuthUser(request, DB);
+        if (!user) return err('Unauthorized', 401);
+        const [, fid, mid] = marDel;
+        await DB.prepare('DELETE FROM marriages WHERE id = ? AND family_id = ?').bind(mid, fid).run();
+        return json({ message: 'Pernikahan dihapus' });
       }
 
       // ── POSITIONS ──
