@@ -164,8 +164,8 @@ export default {
         if (!isSuperAdmin(user) && (!collab || collab.role === 'viewer')) return err('Tidak punya izin', 403);
         const m = await request.json();
         const id = 'p_' + uid();
-        await DB.prepare(`INSERT INTO members (id, family_id, name, gender, birth_date, death_date, birth_place, notes, parent_id, spouse_id, location_lat, location_lng, location_address, nik)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, fid, m.name, m.gender || 'male', m.birth_date || '', m.death_date || '', m.birth_place || '', m.notes || '', m.parent_id || null, m.spouse_id || null, m.location_lat || null, m.location_lng || null, m.location_address || '', m.nik || '').run();
+        await DB.prepare(`INSERT INTO members (id, family_id, name, gender, birth_date, death_date, birth_place, notes, parent_id, spouse_id, location_lat, location_lng, location_address, nik, agama)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, fid, m.name, m.gender || 'male', m.birth_date || '', m.death_date || '', m.birth_place || '', m.notes || '', m.parent_id || null, m.spouse_id || null, m.location_lat || null, m.location_lng || null, m.location_address || '', m.nik || '', m.agama || 'islam').run();
         // Link spouse bidirectional
         if (m.spouse_id) {
           await DB.prepare('UPDATE members SET spouse_id = ? WHERE id = ? AND family_id = ?').bind(id, m.spouse_id, fid).run();
@@ -181,8 +181,8 @@ export default {
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
         if (!isSuperAdmin(user) && (!collab || collab.role === 'viewer')) return err('Tidak punya izin', 403);
         const m = await request.json();
-        await DB.prepare(`UPDATE members SET name=?, gender=?, birth_date=?, death_date=?, birth_place=?, notes=?, parent_id=?, spouse_id=?, location_lat=?, location_lng=?, location_address=?, nik=?, updated_at=datetime('now') WHERE id=? AND family_id=?`)
-          .bind(m.name, m.gender, m.birth_date || '', m.death_date || '', m.birth_place || '', m.notes || '', m.parent_id || null, m.spouse_id || null, m.location_lat || null, m.location_lng || null, m.location_address || '', m.nik || '', mid, fid).run();
+        await DB.prepare(`UPDATE members SET name=?, gender=?, birth_date=?, death_date=?, birth_place=?, notes=?, parent_id=?, spouse_id=?, location_lat=?, location_lng=?, location_address=?, nik=?, agama=?, updated_at=datetime('now') WHERE id=? AND family_id=?`)
+          .bind(m.name, m.gender, m.birth_date || '', m.death_date || '', m.birth_place || '', m.notes || '', m.parent_id || null, m.spouse_id || null, m.location_lat || null, m.location_lng || null, m.location_address || '', m.nik || '', m.agama || 'islam', mid, fid).run();
         return json({ message: 'Diperbarui' });
       }
 

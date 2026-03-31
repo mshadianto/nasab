@@ -88,6 +88,9 @@ CREATE TABLE IF NOT EXISTS canvas_positions (
 -- NIK column (migration)
 ALTER TABLE members ADD COLUMN nik TEXT DEFAULT '';
 
+-- Agama column (migration)
+ALTER TABLE members ADD COLUMN agama TEXT DEFAULT 'islam';
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_members_family ON members(family_id);
 CREATE INDEX IF NOT EXISTS idx_members_parent ON members(parent_id);
