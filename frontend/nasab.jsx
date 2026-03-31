@@ -722,18 +722,20 @@ function Dashboard({user,onSelectFamily,onLogout,onCreateFamily,onAdmin}){
 // WORKSPACE — All views
 // ═══════════════════════════════════════════════════════════════
 function Workspace({family:initFam,user,onBack}){
-  const [fam,setFam]=useState(initFam);const pp=fam.members||[];const [pos,setPos]=useState(fam.positions||{});
+  const [fam,setFam]=useState(initFam);const pp=fam.members||[];const [pos,setPos]=useState(fam.positions||{});const[loading,setLoading]=useState(!initFam.members);
   const [vw,setVw]=useState(VW.CANVAS);const [search,setSearch]=useState("");const [sel,setSel]=useState(null);
   const [showForm,setShowForm]=useState(false);const [editP,setEditP]=useState(null);const [showShare,setShowShare]=useState(false);
   const [showIE,setShowIE]=useState(false);const [showFar,setShowFar]=useState(false);const [toast,setToast]=useState(null);const [filters,setFilters]=useState({});
   const myRole=(fam.collaborators||[]).find(c=>c.userId===user.id)?.role||RL.VIEWER;const canEdit=myRole===RL.OWNER||myRole===RL.EDITOR;
   const flash=m=>{setToast(m);setTimeout(()=>setToast(null),3000)};
   const reloadFam=async()=>{try{const d=await API.getFamily(fam.id);setFam(d);setPos(d.positions||{})}catch{}};
+  useEffect(()=>{if(!initFam.members){(async()=>{try{const d=await API.getFamily(initFam.id);setFam(d);setPos(d.positions||{})}catch{}finally{setLoading(false)}})()}},[initFam.id]);
   const handleSave=async(person,lsid,ltid)=>{if(!canEdit)return;try{if(lsid&&ltid){const sp=pp.find(x=>x.id===lsid);if(sp)await API.updateMember(fam.id,lsid,{...sp,spouseId:ltid});await reloadFam();return}if(!person)return;const ex=pp.find(x=>x.id===person.id);if(ex){await API.updateMember(fam.id,person.id,person);flash(`${person.name} diperbarui`)}else{await API.addMember(fam.id,person);flash(`${person.name} ditambahkan`)}await reloadFam()}catch(e){flash(e.message)}};
   const handleDel=async id=>{if(!canEdit)return;const p=pp.find(x=>x.id===id);if(FE.ch(pp,id).length){alert(`Tidak bisa hapus — ${p.name} masih punya anak.`);return}if(confirm(`Hapus ${p.name}?`)){try{await API.deleteMember(fam.id,id);setSel(null);flash(`${p.name} dihapus`);await reloadFam()}catch(e){flash(e.message)}}};
   const loadDemo=()=>{flash("Demo tidak tersedia dalam mode online")};
   const updPos=useCallback(async p=>{setPos(p);try{await API.savePositions(fam.id,p)}catch{}},[fam]);
   const filtered=useMemo(()=>FE.search(pp,search),[pp,search]);const viewPP=search?filtered:pp;
+  if(loading)return<div className="app"><div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--t3)",fontFamily:"var(--f-display)",fontSize:18}}>Memuat silsilah...</div></div>;
   return(<div className="app">
     <header className="ws-hdr">
       <button className="btn btn-sm btn-ghost" onClick={onBack}><Ic.Back/></button>
