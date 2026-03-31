@@ -803,46 +803,68 @@ function Workspace({family:initFam,user,onBack}){
 function CanvasView({pp,onSel,selId,onPos,savedPos}){
   const wr=useRef(null);const[pos,setPos]=useState({});const[pan,setPan]=useState({x:0,y:0});const[zm,setZm]=useState(.5);
   const[drag,setDrag]=useState(null);const[panning,setPanning]=useState(false);const[didD,setDidD]=useState(false);
-  const ps=useRef({});const ds=useRef({});const fitted=useRef(false);
-  // Calculate zoom & pan to fit all cards in viewport
-  const fitToView=useCallback((p)=>{
+  const ps=useRef({});const ds=useRef({});const fitted=useRef(false);const pinch=useRef(null);
+  // Fit all cards into viewport
+  const fitAll=useCallback((p)=>{
     const el=wr.current;if(!el||!Object.keys(p).length)return;
     const vw=el.clientWidth,vh=el.clientHeight;if(!vw||!vh)return;
     let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
     Object.values(p).forEach(pt=>{minX=Math.min(minX,pt.x);minY=Math.min(minY,pt.y);maxX=Math.max(maxX,pt.x+CW);maxY=Math.max(maxY,pt.y+CH)});
     if(minX===Infinity)return;
-    const pad=60;const tw=maxX-minX+pad*2,th=maxY-minY+pad*2;
-    const z=Math.max(0.12,Math.min(1,Math.min(vw/tw,vh/th)));
+    const pad=40;const tw=maxX-minX+pad*2,th=maxY-minY+pad*2;
+    const z=Math.max(0.1,Math.min(1,Math.min(vw/tw,vh/th)));
     const tcx=(minX+maxX)/2,tcy=(minY+maxY)/2;
     setZm(z);setPan({x:vw/2-tcx*z,y:vh/2-tcy*z});
   },[]);
+  // Comfortable view: zoom to readable level, centered on root
+  const comfortView=useCallback((p)=>{
+    const el=wr.current;if(!el||!Object.keys(p).length)return;
+    const vw=el.clientWidth,vh=el.clientHeight;if(!vw||!vh)return;
+    // Find root (first member with no parent)
+    const root=pp.find(m=>!m.parentId&&p[m.id]);
+    let fcx,fcy;
+    if(root&&p[root.id]){const sp=root.spouseId?pp.find(x=>x.id===root.spouseId):null;const rx=p[root.id].x,ry=p[root.id].y;const sx=sp&&p[sp.id]?p[sp.id].x+CW:rx+CW;fcx=(rx+sx)/2;fcy=ry+CH/2}
+    else{let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;Object.values(p).forEach(pt=>{minX=Math.min(minX,pt.x);minY=Math.min(minY,pt.y);maxX=Math.max(maxX,pt.x+CW);maxY=Math.max(maxY,pt.y+CH)});fcx=(minX+maxX)/2;fcy=(minY+maxY)/2}
+    // Comfortable zoom: readable cards, slightly smaller on mobile
+    const z=vw<600?0.38:vw<1024?0.45:0.55;
+    setZm(z);setPan({x:vw/2-fcx*z,y:vh*0.3-fcy*z});
+  },[pp]);
   useEffect(()=>{
     let p;
     if(savedPos&&Object.keys(savedPos).length>=pp.length){p=savedPos}else{p=autoLayout(pp);onPos(p)}
     setPos(p);
-    // Auto fit-to-view on first load (double rAF to ensure DOM painted & measured)
     fitted.current=false;
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{fitToView(p);fitted.current=true}));
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{comfortView(p);fitted.current=true}));
   },[pp]);
   useEffect(()=>{if(fitted.current&&Object.keys(pos).length>0)onPos(pos)},[pos]);
   const conns=useMemo(()=>getConns(pp,pos),[pp,pos]);
   const bnd=useMemo(()=>{let mx=0,my=0;Object.values(pos).forEach(p=>{mx=Math.max(mx,p.x+CW+200);my=Math.max(my,p.y+CH+200)});return{w:Math.max(mx,2000),h:Math.max(my,1200)}},[pos]);
   const gls=useMemo(()=>{const l={};pp.forEach(p=>{const g=FE.gen(pp,p.id);const po=pos[p.id];if(!po)return;if(!l[g])l[g]={mi:po.y,mx:po.y+CH};l[g].mi=Math.min(l[g].mi,po.y);l[g].mx=Math.max(l[g].mx,po.y+CH)});return l},[pp,pos]);
   const cx=e=>e.touches?e.touches[0].clientX:e.clientX;const cy=e=>e.touches?e.touches[0].clientY:e.clientY;
-  const onPS=e=>{if(e.target.closest('.cc')||e.target.closest('.zm')||e.target.closest('.mm'))return;setPanning(true);ps.current={x:cx(e),y:cy(e),px:pan.x,py:pan.y}};
-  useEffect(()=>{const mv=e=>{if(panning){e.preventDefault();setPan({x:ps.current.px+(cx(e)-ps.current.x),y:ps.current.py+(cy(e)-ps.current.y)})}if(drag){e.preventDefault();const dx=(cx(e)-ds.current.x)/zm,dy=(cy(e)-ds.current.y)/zm;if(Math.abs(dx)>3||Math.abs(dy)>3)setDidD(true);setPos(prev=>({...prev,[drag]:{x:ds.current.ox+dx,y:ds.current.oy+dy}}))}};const up=()=>{setPanning(false);setDrag(null)};window.addEventListener("mousemove",mv);window.addEventListener("mouseup",up);window.addEventListener("touchmove",mv,{passive:false});window.addEventListener("touchend",up);return()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("mouseup",up);window.removeEventListener("touchmove",mv);window.removeEventListener("touchend",up)}});
-  useEffect(()=>{const el=wr.current;const wh=e=>{e.preventDefault();setZm(z=>Math.max(.12,Math.min(2.5,z+(e.deltaY>0?-.05:.05))))};if(el)el.addEventListener("wheel",wh,{passive:false});return()=>el&&el.removeEventListener("wheel",wh)},[]);
+  const onPS=e=>{if(e.target.closest('.cc')||e.target.closest('.zm')||e.target.closest('.mm'))return;
+    // Pinch-to-zoom start
+    if(e.touches&&e.touches.length===2){const t=e.touches;const d=Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);pinch.current={d,z:zm,mx:(t[0].clientX+t[1].clientX)/2,my:(t[0].clientY+t[1].clientY)/2};return}
+    setPanning(true);ps.current={x:cx(e),y:cy(e),px:pan.x,py:pan.y}};
+  useEffect(()=>{const mv=e=>{
+    // Pinch-to-zoom move
+    if(e.touches&&e.touches.length===2&&pinch.current){e.preventDefault();const t=e.touches;const d=Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);const scale=d/pinch.current.d;const nz=Math.max(0.1,Math.min(2.5,pinch.current.z*scale));const mx=pinch.current.mx,my=pinch.current.my;setZm(nz);setPan(prev=>({x:mx-(mx-prev.x)*(nz/zm),y:my-(my-prev.y)*(nz/zm)}));return}
+    if(panning){e.preventDefault();setPan({x:ps.current.px+(cx(e)-ps.current.x),y:ps.current.py+(cy(e)-ps.current.y)})}if(drag){e.preventDefault();const dx=(cx(e)-ds.current.x)/zm,dy=(cy(e)-ds.current.y)/zm;if(Math.abs(dx)>3||Math.abs(dy)>3)setDidD(true);setPos(prev=>({...prev,[drag]:{x:ds.current.ox+dx,y:ds.current.oy+dy}}))}};const up=()=>{setPanning(false);setDrag(null);pinch.current=null};window.addEventListener("mousemove",mv);window.addEventListener("mouseup",up);window.addEventListener("touchmove",mv,{passive:false});window.addEventListener("touchend",up);return()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("mouseup",up);window.removeEventListener("touchmove",mv);window.removeEventListener("touchend",up)}});
+  useEffect(()=>{const el=wr.current;const wh=e=>{e.preventDefault();const rect=el.getBoundingClientRect();const mx=e.clientX-rect.left,my=e.clientY-rect.top;const dz=e.deltaY>0?-0.06:0.06;setZm(z=>{const nz=Math.max(0.1,Math.min(2.5,z+dz));setPan(p=>({x:mx-(mx-p.x)*(nz/z),y:my-(my-p.y)*(nz/z)}));return nz})};if(el)el.addEventListener("wheel",wh,{passive:false});return()=>el&&el.removeEventListener("wheel",wh)},[]);
   const dS=(e,pid)=>{e.stopPropagation();setDrag(pid);setDidD(false);ds.current={x:cx(e),y:cy(e),ox:pos[pid].x,oy:pos[pid].y}};
   const cC=(e,p)=>{e.stopPropagation();if(!didD)onSel(p)};
-  const fit=()=>{const a=autoLayout(pp);setPos(a);onPos(a);requestAnimationFrame(()=>fitToView(a))};
+  // Double-click/tap: zoom to card
+  const lastTap=useRef(0);
+  const dblZoom=useCallback((e,p)=>{const el=wr.current;if(!el)return;const vw=el.clientWidth,vh=el.clientHeight;const pt=pos[p.id];if(!pt)return;const nz=zm<0.5?0.7:zm<0.8?1:0.45;const tcx=pt.x+CW/2,tcy=pt.y+CH/2;setZm(nz);setPan({x:vw/2-tcx*nz,y:vh/2-tcy*nz})},[pos,zm]);
+  const handleCardClick=(e,p)=>{e.stopPropagation();if(didD)return;const now=Date.now();if(now-lastTap.current<350){dblZoom(e,p);lastTap.current=0}else{lastTap.current=now;onSel(p)}};
+  const fit=()=>{const a=autoLayout(pp);setPos(a);onPos(a);requestAnimationFrame(()=>fitAll(a))};
   if(!pp.length)return<div className="empty"><h3>Mulai dari sini</h3><p>Tambahkan anggota pertama atau muat data demo</p></div>;
   return(<div ref={wr} className={`cvs ${panning?"grabbing":""}`} onMouseDown={onPS} onTouchStart={onPS}>
     <div className="cvs-inner" style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zm})`,width:bnd.w,height:bnd.h}}>
       {Object.entries(gls).map(([g,lane])=>{const gi=parseInt(g);const gl=GL[gi]||{l:`Gen ${gi+1}`,i:"👤"};const c=GC[gi%GC.length];return(<div key={g} className="gl" style={{top:lane.mi-22,height:lane.mx-lane.mi+44}}><div className="gl-bg" style={{borderColor:c,background:c}}/><div className="gl-strip" style={{color:c}}><span className="gl-emoji">{gl.i}</span><span className="gl-title">{gl.l}</span><span className="gl-num">Gen {gi+1}</span></div></div>)})}
       <svg className="conn-svg" width={bnd.w} height={bnd.h}>{conns.map((c,i)=>{if(c.t==="sp"){const mx=(c.x1+c.x2)/2;return<g key={i}><line x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--rose)" strokeWidth="1.5" strokeDasharray="5,4" opacity=".45"/><circle cx={mx} cy={c.y1} r="3.5" fill="var(--rose)" opacity=".5"/><text x={mx} y={c.y1-7} textAnchor="middle" fontSize="6" fill="var(--rose)" fontWeight="600" fontFamily="var(--f-mono)" opacity=".6">NIKAH</text></g>}return<line key={i} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--bdr2)" strokeWidth="1.5"/>})}</svg>
-      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];const bd=p.birthDate?new Date(p.birthDate).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}):"";return(<div key={p.id} className={`cc ${p.gender} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""}`} style={{left:po.x,top:po.y}} onMouseDown={e=>dS(e,p.id)} onTouchStart={e=>dS(e,p.id)} onClick={e=>cC(e,p)}><div className="cc-bar"/><div className="cc-body"><div className={`cc-av ${p.gender}`}>{ini(p.name)}</div><div className="cc-info"><div className="cc-name">{p.name}</div><div className="cc-meta">{p.gender==="male"?"♂":"♀"}{bd?` · ${bd}`:""}{p.deathDate?" · Alm.":""}</div>{p.location?.address&&<div className="cc-meta">📍 {p.location.address.split(",")[0]}</div>}</div></div><div className="cc-gen" style={{background:c}}/></div>)})}
+      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];const bd=p.birthDate?new Date(p.birthDate).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}):"";return(<div key={p.id} className={`cc ${p.gender} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""}`} style={{left:po.x,top:po.y}} onMouseDown={e=>dS(e,p.id)} onTouchStart={e=>dS(e,p.id)} onClick={e=>handleCardClick(e,p)}><div className="cc-bar"/><div className="cc-body"><div className={`cc-av ${p.gender}`}>{ini(p.name)}</div><div className="cc-info"><div className="cc-name">{p.name}</div><div className="cc-meta">{p.gender==="male"?"♂":"♀"}{bd?` · ${bd}`:""}{p.deathDate?" · Alm.":""}</div>{p.location?.address&&<div className="cc-meta">📍 {p.location.address.split(",")[0]}</div>}</div></div><div className="cc-gen" style={{background:c}}/></div>)})}
     </div>
-    <div className="zm"><button onClick={()=>setZm(z=>Math.min(2.5,z+.1))}>+</button><button onClick={()=>setZm(z=>Math.max(.12,z-.1))}>−</button><button onClick={fit}><Ic.Fit/></button><div style={{fontSize:8,textAlign:"center",color:"var(--t3)",fontFamily:"var(--f-mono)"}}>{Math.round(zm*100)}%</div></div>
+    <div className="zm"><button onClick={()=>setZm(z=>Math.min(2.5,z+.12))}>+</button><button onClick={()=>setZm(z=>Math.max(.1,z-.12))}>−</button><button onClick={fit} title="Fit semua"><Ic.Fit/></button><button onClick={()=>comfortView(pos)} title="Zoom nyaman" style={{fontSize:10}}>🏠</button><div style={{fontSize:8,textAlign:"center",color:"var(--t3)",fontFamily:"var(--f-mono)"}}>{Math.round(zm*100)}%</div></div>
     <div className="mm"><svg width="150" height="80" viewBox={`0 0 ${bnd.w} ${bnd.h}`}>{pp.map(p=>{const po=pos[p.id];return po?<rect key={p.id} x={po.x} y={po.y} width={CW} height={CH} rx="3" fill={p.gender==="male"?"var(--male-t)":"var(--fem-t)"} opacity=".35"/>:null})}</svg></div>
   </div>);
 }
