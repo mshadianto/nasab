@@ -258,7 +258,7 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 .m-body{padding:16px 20px}.m-ftr{padding:12px 20px;display:flex;gap:6px;justify-content:flex-end;border-top:1px solid var(--bdr)}
 
 /* ── CANVAS ── */
-.cvs{flex:1;position:relative;overflow:hidden;background:var(--bg0);cursor:grab;touch-action:none}.cvs.grabbing{cursor:grabbing}
+.cvs{width:100%;height:100%;position:relative;overflow:hidden;background:var(--bg0);cursor:grab;touch-action:none}.cvs.grabbing{cursor:grabbing}
 .cvs-inner{position:absolute;top:0;left:0;transform-origin:0 0}
 .gl{position:absolute;left:0;right:0;pointer-events:none;z-index:1}
 .gl-strip{position:absolute;left:0;top:0;bottom:0;width:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;z-index:2;padding:4px 2px;background:linear-gradient(90deg,rgba(7,9,14,.9) 60%,transparent)}
