@@ -144,11 +144,11 @@ const css=`
   --f-display:'Instrument Serif',serif;--f-body:'DM Sans',sans-serif;--f-mono:'JetBrains Mono',monospace;
 }
 *{margin:0;padding:0;box-sizing:border-box}
-body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-height:100vh;overflow:hidden}
-.app{height:100vh;display:flex;flex-direction:column}
+body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-height:100vh;min-height:100dvh;overflow:hidden;-webkit-tap-highlight-color:transparent}
+.app{height:100vh;height:100dvh;display:flex;flex-direction:column}
 
 /* ── AUTH / LANDING ── */
-.auth-wrap{height:100vh;display:flex;overflow:hidden}
+.auth-wrap{height:100vh;height:100dvh;display:flex;overflow:hidden}
 .auth-hero{flex:1;display:flex;flex-direction:column;justify-content:center;padding:60px;background:linear-gradient(160deg,#080c14 0%,#0a1020 50%,#0c1428 100%);position:relative;overflow:hidden}
 .auth-hero::before{content:'';position:absolute;top:-120px;right:-120px;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(20,184,166,.08) 0%,transparent 70%)}
 .auth-hero::after{content:'';position:absolute;bottom:-80px;left:-80px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(99,102,241,.06) 0%,transparent 70%)}
@@ -170,7 +170,7 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 .auth-trust-item b{color:var(--t2)}
 
 /* ── DASHBOARD ── */
-.dash{height:100vh;display:flex;flex-direction:column}
+.dash{height:100vh;height:100dvh;display:flex;flex-direction:column}
 .dash-hdr{background:var(--bg1);border-bottom:1px solid var(--bdr);padding:14px 28px;display:flex;align-items:center;justify-content:space-between}
 .dash-hdr h1{font-family:var(--f-display);font-size:22px}.dash-hdr h1 em{color:var(--pri);font-style:italic}
 .dash-user{display:flex;align-items:center;gap:10px;font-size:13px}
@@ -223,7 +223,7 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 .m-body{padding:16px 20px}.m-ftr{padding:12px 20px;display:flex;gap:6px;justify-content:flex-end;border-top:1px solid var(--bdr)}
 
 /* ── CANVAS ── */
-.cvs{flex:1;position:relative;overflow:hidden;background:var(--bg0);cursor:grab}.cvs.grabbing{cursor:grabbing}
+.cvs{flex:1;position:relative;overflow:hidden;background:var(--bg0);cursor:grab;touch-action:none}.cvs.grabbing{cursor:grabbing}
 .cvs-inner{position:absolute;top:0;left:0;transform-origin:0 0}
 .gl{position:absolute;left:0;right:0;pointer-events:none;z-index:1}
 .gl-strip{position:absolute;left:0;top:0;bottom:0;width:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;z-index:2;padding:4px 2px;background:linear-gradient(90deg,rgba(7,9,14,.9) 60%,transparent)}
@@ -366,7 +366,203 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 .nik-info{font-size:9px;color:var(--t3);margin-top:3px;line-height:1.5}
 .nik-info b{color:var(--pri)}
 .nik-masked{font-family:var(--f-mono);font-size:10px;color:var(--t2);letter-spacing:.5px}
-@media(max-width:768px){.auth-wrap{flex-direction:column}.auth-hero{padding:30px;flex:none}.auth-form-side{width:100%;border-left:none;border-top:1px solid var(--bdr)}.ws-hdr{padding:8px 12px}.sb{width:100%}.fr,.ins-g{grid-template-columns:1fr}.dash-grid{grid-template-columns:1fr}.navt{padding:5px 8px;font-size:10px}.admin-stats{grid-template-columns:repeat(2,1fr)}.far-heirs{grid-template-columns:1fr}}
+/* ── RESPONSIVE: Tablet (≤1024px) ── */
+@media(max-width:1024px){
+  .auth-hero{padding:40px}
+  .auth-form-side{width:360px;padding:30px}
+  .auth-brand h1{font-size:40px}
+  .dash-body{padding:20px}
+  .ins-g{grid-template-columns:1fr 1fr}
+  .admin-stats{grid-template-columns:repeat(2,1fr)}
+  .admin-panel{padding:16px}
+  .sb{width:280px}
+  .map-leg{min-width:120px;padding:8px 10px}
+}
+/* ── RESPONSIVE: Mobile landscape / small tablet (≤768px) ── */
+@media(max-width:768px){
+  .auth-wrap{flex-direction:column;overflow-y:auto}
+  .auth-hero{padding:24px 20px;flex:none}
+  .auth-brand{margin-bottom:20px}
+  .auth-brand h1{font-size:36px}
+  .auth-brand p{font-size:13px}
+  .auth-features{gap:10px;margin-top:4px}
+  .auth-feat{padding:10px 12px}
+  .auth-feat-icon{width:30px;height:30px;font-size:14px}
+  .auth-feat-text h4{font-size:12px}.auth-feat-text p{font-size:10px}
+  .auth-form-side{width:100%;border-left:none;border-top:1px solid var(--bdr);padding:24px 20px}
+  .auth-form h2{font-size:22px}
+  .auth-trust{gap:10px;flex-wrap:wrap}
+  .dash-hdr{padding:10px 16px;flex-wrap:wrap;gap:8px}
+  .dash-hdr h1{font-size:18px}
+  .dash-user{font-size:12px;gap:6px}
+  .dash-body{padding:16px}
+  .dash-grid{grid-template-columns:1fr}
+  .fam-card{padding:16px}
+  .fam-card h3{font-size:15px}
+  .ws-hdr{padding:8px 12px;gap:8px}
+  .ws-brand h1{font-size:14px}
+  .ws-brand span{font-size:10px!important}
+  .nav{overflow-x:auto;flex-shrink:0;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .nav::-webkit-scrollbar{display:none}
+  .navt{padding:5px 8px;font-size:10px;white-space:nowrap}
+  .ws-actions{gap:4px}
+  .sbox{min-width:100px;padding:4px 8px}
+  .sbox input{font-size:10px}
+  .sb{width:100%;max-width:100%}
+  .sb-nm{font-size:15px}
+  .sb-row-v{max-width:140px;font-size:10px}
+  .fr{grid-template-columns:1fr}
+  .ins{padding:12px}
+  .ins-g{grid-template-columns:1fr}
+  .ins-c h3{font-size:13px}
+  .sg{grid-template-columns:repeat(2,1fr);gap:8px;padding:12px}
+  .sc{padding:10px}
+  .sc-v{font-size:22px}
+  .lv{padding:12px}
+  .li{padding:8px 10px}
+  .tl{padding:12px 12px 12px 36px}.tl::before{left:16px}
+  .tl-dot{left:-24px}
+  .modal{max-width:calc(100vw - 24px);max-height:90vh;border-radius:10px}
+  .m-hdr{padding:12px 16px}.m-hdr h2{font-size:16px}
+  .m-body{padding:12px 16px}
+  .m-ftr{padding:10px 16px}
+  .map-leg{top:auto;bottom:50px;right:8px;left:8px;display:flex;gap:8px;flex-wrap:wrap;padding:8px;min-width:0}
+  .map-leg-t{width:100%}
+  .map-bar{bottom:8px;left:8px;right:8px}
+  .admin-stats{grid-template-columns:repeat(2,1fr);gap:8px}
+  .admin-stat{padding:12px}
+  .admin-val{font-size:24px}
+  .admin-tabs{flex-wrap:wrap;gap:3px}
+  .admin-tab{padding:6px 12px;font-size:11px}
+  .admin-table{font-size:11px}
+  .admin-table th,.admin-table td{padding:8px 6px}
+  .far-heirs{grid-template-columns:1fr}
+  .far-table{font-size:11px}
+  .far-table th,.far-table td{padding:6px 4px}
+  .far-total{flex-wrap:wrap}
+  .fbar{gap:4px;padding:6px 10px}
+  .fbar select{font-size:9px;padding:3px 5px}
+  .fbar label{font-size:8px}
+  .mm{width:100px;height:55px;bottom:10px;left:10px}
+  .zm{bottom:10px;right:10px}
+  .zm button{width:26px;height:26px;font-size:13px}
+  .geo-w{padding:6px 8px}
+}
+/* ── RESPONSIVE: Small mobile (≤480px) ── */
+@media(max-width:480px){
+  .auth-hero{padding:20px 16px}
+  .auth-brand h1{font-size:28px}
+  .auth-brand p{font-size:12px}
+  .auth-features{display:none}
+  .auth-form-side{padding:20px 16px}
+  .auth-form h2{font-size:20px}
+  .auth-form .sub{font-size:11px;margin-bottom:16px}
+  .fi,.fsel,.fta{font-size:12px;padding:7px 10px}
+  .btn-block{padding:9px;font-size:12px}
+  .dash-hdr{padding:8px 12px}
+  .dash-hdr h1{font-size:16px}
+  .dash-user{gap:4px;font-size:11px}
+  .dash-user b{max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
+  .dash-av{width:28px;height:28px;font-size:10px}
+  .dash-body{padding:12px}
+  .fam-card{padding:14px}
+  .fam-card h3{font-size:14px}
+  .fam-card p{font-size:11px}
+  .fam-card-stats{font-size:10px}
+  .fam-new{min-height:100px}
+  .ws-hdr{padding:6px 8px;gap:6px}
+  .ws-brand{gap:4px}
+  .ws-brand h1{font-size:13px}
+  .ws-tag{font-size:6px;padding:1px 4px}
+  .nav{padding:1px}
+  .navt{padding:4px 6px;font-size:9px}
+  .ws-actions{gap:3px}
+  .sbox{min-width:80px;padding:3px 6px}
+  .btn-sm{padding:3px 6px;font-size:10px}
+  .sb{z-index:90}
+  .sb-h{padding:10px 12px}
+  .sb-b{padding:10px 12px}
+  .sb-av{width:44px;height:44px;font-size:18px}
+  .sb-nm{font-size:14px}
+  .sb-sub{font-size:9px}
+  .sb-row{font-size:10px}
+  .sb-row-v{max-width:120px;font-size:9px}
+  .sb-rel{padding:5px 7px;font-size:10px}
+  .sb-ft{padding:8px 12px}
+  .sg{grid-template-columns:repeat(2,1fr);gap:6px;padding:10px}
+  .sc{padding:8px}
+  .sc-v{font-size:18px}
+  .sc-l{font-size:8px}
+  .ins{padding:10px}
+  .ins-c{padding:10px}
+  .rf-sel{gap:4px}
+  .rf-sel select{min-width:0;font-size:10px}
+  .lv{padding:10px}
+  .li{gap:8px;padding:7px 8px}
+  .li-av{width:28px;height:28px;font-size:10px;border-radius:6px}
+  .li-info h4{font-size:11px}
+  .li-info p{font-size:9px}
+  .li-badge{font-size:7px;padding:2px 4px}
+  .tl{padding:10px 10px 10px 30px}.tl::before{left:12px}
+  .tl-dot{left:-22px;width:6px;height:6px}
+  .tl-i{padding:8px 10px}
+  .tl-yr{font-size:8px}.tl-tt{font-size:11px}
+  .modal-ov{padding:8px;align-items:flex-end}
+  .modal{max-width:100%;max-height:92vh;border-radius:12px 12px 0 0}
+  .modal .m-body{max-height:65vh;overflow-y:auto}
+  .admin-panel{padding:10px}
+  .admin-stats{grid-template-columns:1fr 1fr;gap:6px}
+  .admin-stat{padding:10px}
+  .admin-val{font-size:20px}
+  .admin-table th,.admin-table td{padding:6px 4px;font-size:10px}
+  .far-sel{flex-direction:column;align-items:stretch}
+  .far-total{flex-direction:column;align-items:stretch}
+  .far-total input{max-width:100%}
+  .far-table th,.far-table td{padding:5px 3px;font-size:10px}
+  .far-type{font-size:7px}
+  .map-leg{flex-direction:row;gap:6px;font-size:9px}
+  .map-leg-t{width:auto;margin-right:auto}
+  .mm{width:80px;height:44px;bottom:8px;left:8px}
+  .zm{bottom:8px;right:8px}
+  .zm button{width:24px;height:24px;font-size:12px}
+  .collab-i{padding:6px 8px;font-size:10px}
+  .collab-av{width:22px;height:22px;font-size:8px}
+  .fbar{padding:5px 8px;gap:3px}
+  .st-entry{padding:7px 9px}
+  .st-text{font-size:10px}
+  .bd-i{padding:5px 6px;gap:6px}
+  .bd-d{min-width:36px;font-size:8px;padding:2px 4px}
+  .bd-info{font-size:10px}
+}
+/* ── RESPONSIVE: Very small (≤360px) ── */
+@media(max-width:360px){
+  .auth-brand h1{font-size:24px}
+  .ws-brand span:not(h1){display:none}
+  .navt{padding:3px 5px;font-size:8px}
+  .btn-sm{padding:2px 5px;font-size:9px}
+  .sg{grid-template-columns:1fr}
+  .admin-stats{grid-template-columns:1fr}
+}
+/* ── Touch / safe areas ── */
+@supports(padding:env(safe-area-inset-bottom)){
+  .ws-hdr{padding-left:max(8px,env(safe-area-inset-left));padding-right:max(8px,env(safe-area-inset-right))}
+  .dash-hdr{padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right))}
+  .sb-ft{padding-bottom:max(10px,env(safe-area-inset-bottom))}
+  .modal{padding-bottom:env(safe-area-inset-bottom)}
+  .toast{bottom:max(16px,env(safe-area-inset-bottom))}
+}
+/* ── Landscape mobile ── */
+@media(max-height:500px) and (orientation:landscape){
+  .auth-wrap{flex-direction:row}
+  .auth-hero{padding:16px 20px;overflow-y:auto}
+  .auth-features{display:none}
+  .auth-form-side{width:320px;padding:16px;border-left:1px solid var(--bdr);border-top:none}
+  .auth-brand{margin-bottom:10px}
+  .auth-brand h1{font-size:28px}
+  .modal-ov{align-items:center}
+  .modal{max-height:90vh;border-radius:10px}
+  .sb{width:260px}
+}
 `;
 
 // ─── ICONS ───────────────────────────────────────────────────
@@ -540,18 +736,19 @@ function CanvasView({pp,onSel,selId,onPos,savedPos}){
   const conns=useMemo(()=>getConns(pp,pos),[pp,pos]);
   const bnd=useMemo(()=>{let mx=0,my=0;Object.values(pos).forEach(p=>{mx=Math.max(mx,p.x+CW+200);my=Math.max(my,p.y+CH+200)});return{w:Math.max(mx,2000),h:Math.max(my,1200)}},[pos]);
   const gls=useMemo(()=>{const l={};pp.forEach(p=>{const g=FE.gen(pp,p.id);const po=pos[p.id];if(!po)return;if(!l[g])l[g]={mi:po.y,mx:po.y+CH};l[g].mi=Math.min(l[g].mi,po.y);l[g].mx=Math.max(l[g].mx,po.y+CH)});return l},[pp,pos]);
-  const onPS=e=>{if(e.target.closest('.cc')||e.target.closest('.zm')||e.target.closest('.mm'))return;setPanning(true);ps.current={x:e.clientX,y:e.clientY,px:pan.x,py:pan.y}};
-  useEffect(()=>{const mv=e=>{if(panning)setPan({x:ps.current.px+(e.clientX-ps.current.x),y:ps.current.py+(e.clientY-ps.current.y)});if(drag){const dx=(e.clientX-ds.current.x)/zm,dy=(e.clientY-ds.current.y)/zm;if(Math.abs(dx)>3||Math.abs(dy)>3)setDidD(true);setPos(prev=>({...prev,[drag]:{x:ds.current.ox+dx,y:ds.current.oy+dy}}))}};const up=()=>{setPanning(false);setDrag(null)};window.addEventListener("mousemove",mv);window.addEventListener("mouseup",up);return()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("mouseup",up)}});
+  const cx=e=>e.touches?e.touches[0].clientX:e.clientX;const cy=e=>e.touches?e.touches[0].clientY:e.clientY;
+  const onPS=e=>{if(e.target.closest('.cc')||e.target.closest('.zm')||e.target.closest('.mm'))return;setPanning(true);ps.current={x:cx(e),y:cy(e),px:pan.x,py:pan.y}};
+  useEffect(()=>{const mv=e=>{if(panning){e.preventDefault();setPan({x:ps.current.px+(cx(e)-ps.current.x),y:ps.current.py+(cy(e)-ps.current.y)})}if(drag){e.preventDefault();const dx=(cx(e)-ds.current.x)/zm,dy=(cy(e)-ds.current.y)/zm;if(Math.abs(dx)>3||Math.abs(dy)>3)setDidD(true);setPos(prev=>({...prev,[drag]:{x:ds.current.ox+dx,y:ds.current.oy+dy}}))}};const up=()=>{setPanning(false);setDrag(null)};window.addEventListener("mousemove",mv);window.addEventListener("mouseup",up);window.addEventListener("touchmove",mv,{passive:false});window.addEventListener("touchend",up);return()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("mouseup",up);window.removeEventListener("touchmove",mv);window.removeEventListener("touchend",up)}});
   useEffect(()=>{const el=wr.current;const wh=e=>{e.preventDefault();setZm(z=>Math.max(.12,Math.min(2.5,z+(e.deltaY>0?-.05:.05))))};if(el)el.addEventListener("wheel",wh,{passive:false});return()=>el&&el.removeEventListener("wheel",wh)},[]);
-  const dS=(e,pid)=>{e.stopPropagation();setDrag(pid);setDidD(false);ds.current={x:e.clientX,y:e.clientY,ox:pos[pid].x,oy:pos[pid].y}};
+  const dS=(e,pid)=>{e.stopPropagation();setDrag(pid);setDidD(false);ds.current={x:cx(e),y:cy(e),ox:pos[pid].x,oy:pos[pid].y}};
   const cC=(e,p)=>{e.stopPropagation();if(!didD)onSel(p)};
   const fit=()=>{setPos(autoLayout(pp));setPan({x:0,y:0});setZm(.68)};
   if(!pp.length)return<div className="empty"><h3>Mulai dari sini</h3><p>Tambahkan anggota pertama atau muat data demo</p></div>;
-  return(<div ref={wr} className={`cvs ${panning?"grabbing":""}`} onMouseDown={onPS}>
+  return(<div ref={wr} className={`cvs ${panning?"grabbing":""}`} onMouseDown={onPS} onTouchStart={onPS}>
     <div className="cvs-inner" style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zm})`,width:bnd.w,height:bnd.h}}>
       {Object.entries(gls).map(([g,lane])=>{const gi=parseInt(g);const gl=GL[gi]||{l:`Gen ${gi+1}`,i:"👤"};const c=GC[gi%GC.length];return(<div key={g} className="gl" style={{top:lane.mi-22,height:lane.mx-lane.mi+44}}><div className="gl-bg" style={{borderColor:c,background:c}}/><div className="gl-strip" style={{color:c}}><span className="gl-emoji">{gl.i}</span><span className="gl-title">{gl.l}</span><span className="gl-num">Gen {gi+1}</span></div></div>)})}
       <svg className="conn-svg" width={bnd.w} height={bnd.h}>{conns.map((c,i)=>{if(c.t==="sp"){const mx=(c.x1+c.x2)/2;return<g key={i}><line x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--rose)" strokeWidth="1.5" strokeDasharray="5,4" opacity=".45"/><circle cx={mx} cy={c.y1} r="3.5" fill="var(--rose)" opacity=".5"/><text x={mx} y={c.y1-7} textAnchor="middle" fontSize="6" fill="var(--rose)" fontWeight="600" fontFamily="var(--f-mono)" opacity=".6">NIKAH</text></g>}return<line key={i} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--bdr2)" strokeWidth="1.5"/>})}</svg>
-      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];return(<div key={p.id} className={`cc ${p.gender} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""}`} style={{left:po.x,top:po.y}} onMouseDown={e=>dS(e,p.id)} onClick={e=>cC(e,p)}><div className="cc-bar"/><div className="cc-body"><div className={`cc-av ${p.gender}`}>{ini(p.name)}</div><div className="cc-info"><div className="cc-name">{p.name}</div><div className="cc-meta">{p.gender==="male"?"♂":"♀"}{p.location?.address?` · ${p.location.address.split(",")[0]}`:""}</div></div></div><div className="cc-gen" style={{background:c}}/></div>)})}
+      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];return(<div key={p.id} className={`cc ${p.gender} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""}`} style={{left:po.x,top:po.y}} onMouseDown={e=>dS(e,p.id)} onTouchStart={e=>dS(e,p.id)} onClick={e=>cC(e,p)}><div className="cc-bar"/><div className="cc-body"><div className={`cc-av ${p.gender}`}>{ini(p.name)}</div><div className="cc-info"><div className="cc-name">{p.name}</div><div className="cc-meta">{p.gender==="male"?"♂":"♀"}{p.location?.address?` · ${p.location.address.split(",")[0]}`:""}</div></div></div><div className="cc-gen" style={{background:c}}/></div>)})}
     </div>
     <div className="zm"><button onClick={()=>setZm(z=>Math.min(2.5,z+.1))}>+</button><button onClick={()=>setZm(z=>Math.max(.12,z-.1))}>−</button><button onClick={fit}><Ic.Fit/></button><div style={{fontSize:8,textAlign:"center",color:"var(--t3)",fontFamily:"var(--f-mono)"}}>{Math.round(zm*100)}%</div></div>
     <div className="mm"><svg width="150" height="80" viewBox={`0 0 ${bnd.w} ${bnd.h}`}>{pp.map(p=>{const po=pos[p.id];return po?<rect key={p.id} x={po.x} y={po.y} width={CW} height={CH} rx="3" fill={p.gender==="male"?"var(--male-t)":"var(--fem-t)"} opacity=".35"/>:null})}</svg></div>
