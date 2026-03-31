@@ -776,11 +776,30 @@ function Workspace({family:initFam,user,onBack}){
 
 // ─── CANVAS ──────────────────────────────────────────────────
 function CanvasView({pp,onSel,selId,onPos,savedPos}){
-  const wr=useRef(null);const[pos,setPos]=useState({});const[pan,setPan]=useState({x:0,y:0});const[zm,setZm]=useState(.68);
+  const wr=useRef(null);const[pos,setPos]=useState({});const[pan,setPan]=useState({x:0,y:0});const[zm,setZm]=useState(.5);
   const[drag,setDrag]=useState(null);const[panning,setPanning]=useState(false);const[didD,setDidD]=useState(false);
-  const ps=useRef({});const ds=useRef({});
-  useEffect(()=>{if(savedPos&&Object.keys(savedPos).length>=pp.length)setPos(savedPos);else{const a=autoLayout(pp);setPos(a);onPos(a)}},[pp]);
-  useEffect(()=>{if(Object.keys(pos).length>0)onPos(pos)},[pos]);
+  const ps=useRef({});const ds=useRef({});const fitted=useRef(false);
+  // Calculate zoom & pan to fit all cards in viewport
+  const fitToView=useCallback((p)=>{
+    const el=wr.current;if(!el||!Object.keys(p).length)return;
+    const vw=el.clientWidth,vh=el.clientHeight;if(!vw||!vh)return;
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    Object.values(p).forEach(pt=>{minX=Math.min(minX,pt.x);minY=Math.min(minY,pt.y);maxX=Math.max(maxX,pt.x+CW);maxY=Math.max(maxY,pt.y+CH)});
+    if(minX===Infinity)return;
+    const tw=maxX-minX+80,th=maxY-minY+80;
+    const z=Math.min(Math.max(vw/tw,0.15),Math.min(vh/th,1.2));
+    const cx=(minX+maxX)/2,cy=(minY+maxY)/2;
+    setZm(z);setPan({x:vw/2-cx*z,y:vh/2-cy*z});
+  },[]);
+  useEffect(()=>{
+    let p;
+    if(savedPos&&Object.keys(savedPos).length>=pp.length){p=savedPos}else{p=autoLayout(pp);onPos(p)}
+    setPos(p);
+    // Auto fit-to-view on first load (use rAF to ensure DOM measured)
+    fitted.current=false;
+    requestAnimationFrame(()=>{fitToView(p);fitted.current=true});
+  },[pp]);
+  useEffect(()=>{if(fitted.current&&Object.keys(pos).length>0)onPos(pos)},[pos]);
   const conns=useMemo(()=>getConns(pp,pos),[pp,pos]);
   const bnd=useMemo(()=>{let mx=0,my=0;Object.values(pos).forEach(p=>{mx=Math.max(mx,p.x+CW+200);my=Math.max(my,p.y+CH+200)});return{w:Math.max(mx,2000),h:Math.max(my,1200)}},[pos]);
   const gls=useMemo(()=>{const l={};pp.forEach(p=>{const g=FE.gen(pp,p.id);const po=pos[p.id];if(!po)return;if(!l[g])l[g]={mi:po.y,mx:po.y+CH};l[g].mi=Math.min(l[g].mi,po.y);l[g].mx=Math.max(l[g].mx,po.y+CH)});return l},[pp,pos]);
@@ -790,7 +809,7 @@ function CanvasView({pp,onSel,selId,onPos,savedPos}){
   useEffect(()=>{const el=wr.current;const wh=e=>{e.preventDefault();setZm(z=>Math.max(.12,Math.min(2.5,z+(e.deltaY>0?-.05:.05))))};if(el)el.addEventListener("wheel",wh,{passive:false});return()=>el&&el.removeEventListener("wheel",wh)},[]);
   const dS=(e,pid)=>{e.stopPropagation();setDrag(pid);setDidD(false);ds.current={x:cx(e),y:cy(e),ox:pos[pid].x,oy:pos[pid].y}};
   const cC=(e,p)=>{e.stopPropagation();if(!didD)onSel(p)};
-  const fit=()=>{setPos(autoLayout(pp));setPan({x:0,y:0});setZm(.68)};
+  const fit=()=>{const a=autoLayout(pp);setPos(a);onPos(a);requestAnimationFrame(()=>fitToView(a))};
   if(!pp.length)return<div className="empty"><h3>Mulai dari sini</h3><p>Tambahkan anggota pertama atau muat data demo</p></div>;
   return(<div ref={wr} className={`cvs ${panning?"grabbing":""}`} onMouseDown={onPS} onTouchStart={onPS}>
     <div className="cvs-inner" style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zm})`,width:bnd.w,height:bnd.h}}>
