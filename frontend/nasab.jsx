@@ -158,9 +158,29 @@ const FE={
 };
 
 // ─── LAYOUT / CONNECTORS ─────────────────────────────────────
-function autoLayout(pp,marriages=[]){const roots=FE.roots(pp,marriages);const pos={};
-  function lay(pid,d){const p=pp.find(x=>x.id===pid);if(!p||pos[pid])return{x:0,w:0};const sps=FE.spouses(pp,p,marriages);const ch=FE.ch(pp,pid);const spCount=sps.filter(s=>!pos[s.id]).length;const cw=CW+(spCount*(CW+CG));if(!ch.length){const y=d*(CH+GY);pos[pid]={x:0,y};let sx=CW+CG;sps.forEach(s=>{if(!pos[s.id]){pos[s.id]={x:sx,y};sx+=CW+CG}});return{x:0,w:cw}}const cls=[];let cur=0;ch.forEach(c=>{const cl=lay(c.id,d+1);cls.push({...cl,offset:cur});cur+=cl.w+GX});const tcw=cur-GX;const cx=(cls[0].offset+cls[cls.length-1].offset+cls[cls.length-1].w)/2-cw/2;const px=Math.max(0,cx);const y=d*(CH+GY);pos[pid]={x:px,y};let sx=px+CW+CG;sps.forEach(s=>{if(!pos[s.id]){pos[s.id]={x:sx,y};sx+=CW+CG}});const cbx=px+cw/2-tcw/2;ch.forEach((c,i)=>shift(c.id,cbx+cls[i].offset));return{x:Math.min(px,cbx),w:Math.max(px+cw,cbx+tcw)-Math.min(px,cbx)}}
+const MAX_COLS=4; // wrap siblings after this many
+function autoLayout(pp,marriages=[],collapsed=new Set()){const roots=FE.roots(pp,marriages);const pos={};
+  function isVis(pid){// check if any ancestor is collapsed
+    let cur=pp.find(x=>x.id===pid);while(cur&&cur.parentId){if(collapsed.has(cur.parentId))return false;cur=pp.find(x=>x.id===cur.parentId)}return true}
+  function lay(pid,d){const p=pp.find(x=>x.id===pid);if(!p||pos[pid])return{x:0,w:0};const sps=FE.spouses(pp,p,marriages);const ch=collapsed.has(pid)?[]:FE.ch(pp,pid).filter(c=>isVis(c.id));const spCount=sps.filter(s=>!pos[s.id]).length;const cw=CW+(spCount*(CW+CG));
+    if(!ch.length){const y=d*(CH+GY);pos[pid]={x:0,y};let sx=CW+CG;sps.forEach(s=>{if(!pos[s.id]){pos[s.id]={x:sx,y};sx+=CW+CG}});return{x:0,w:cw}}
+    // Compact: wrap children into rows if >MAX_COLS
+    const rows=[];for(let i=0;i<ch.length;i+=MAX_COLS)rows.push(ch.slice(i,i+MAX_COLS));
+    const cls=[];let cur=0;let rowY=0;
+    rows.forEach((row,ri)=>{const rowCls=[];let rowCur=0;
+      row.forEach(c=>{const cl=lay(c.id,d+1+ri);rowCls.push({...cl,offset:cur+rowCur});rowCur+=cl.w+GX});
+      rowCls.forEach(c=>cls.push(c));cur=Math.max(cur,rowCur-GX+cur);
+      // If multiple rows, shift subsequent rows down
+      if(ri>0)row.forEach(c=>shiftY(c.id,(CH+GY)*ri));
+      rowY=ri});
+    const tcw=Math.max(...cls.map(c=>c.offset+c.w))-Math.min(...cls.map(c=>c.offset));
+    const cx=(cls[0].offset+cls[cls.length-1].offset+cls[cls.length-1].w)/2-cw/2;const px=Math.max(0,cx);
+    const y=d*(CH+GY);pos[pid]={x:px,y};let sx=px+CW+CG;sps.forEach(s=>{if(!pos[s.id]){pos[s.id]={x:sx,y};sx+=CW+CG}});
+    const minOff=Math.min(...cls.map(c=>c.offset));const cbx=px+cw/2-tcw/2-minOff;
+    ch.forEach((c,i)=>shift(c.id,cbx+cls[i].offset));
+    return{x:Math.min(px,cbx+minOff),w:Math.max(px+cw,cbx+minOff+tcw)-Math.min(px,cbx+minOff)}}
   function shift(pid,dx){if(!pos[pid])return;pos[pid].x+=dx;const sps=FE.spouses(pp,pp.find(x=>x.id===pid),marriages);sps.forEach(s=>{if(pos[s.id])pos[s.id].x+=dx});FE.ch(pp,pid).forEach(c=>shift(c.id,dx))}
+  function shiftY(pid,dy){if(!pos[pid])return;pos[pid].y+=dy;const sps=FE.spouses(pp,pp.find(x=>x.id===pid),marriages);sps.forEach(s=>{if(pos[s.id])pos[s.id].y+=dy});FE.ch(pp,pid).forEach(c=>shiftY(c.id,dy))}
   let gc=0;roots.forEach(root=>{const r=lay(root.id,0);const sh=gc;const sa=pid=>{if(pos[pid])pos[pid].x+=sh;const sps=FE.spouses(pp,pp.find(x=>x.id===pid),marriages);sps.forEach(s=>{if(pos[s.id])pos[s.id].x+=sh});FE.ch(pp,pid).forEach(c=>sa(c.id))};sa(root.id);gc+=r.w+GX*3});
   let mx=Infinity,my=Infinity;Object.values(pos).forEach(p=>{mx=Math.min(mx,p.x);my=Math.min(my,p.y)});Object.values(pos).forEach(p=>{p.x-=mx-100;p.y-=my-80});return pos}
 const REL_LABELS=["Anak","Cucu","Cicit","Canggah","Wareng"];
@@ -310,6 +330,22 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 .cc-status{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg2)}
 .cc-info{min-width:0;flex:1}.cc-name{font-size:11px;font-weight:600;line-height:1.25;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .cc-meta{font-size:8px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.2px}.cc-gen{position:absolute;top:0;right:0;width:18px;height:18px;border-radius:0 10px 0 8px;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#000;font-family:var(--f-mono)}
+/* Expand/collapse toggle */
+.cc-toggle{position:absolute;bottom:-12px;left:50%;transform:translateX(-50%);width:24px;height:16px;border-radius:0 0 8px 8px;border:1px solid var(--bdr);border-top:none;background:var(--bg1);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:15;font-size:8px;font-weight:700;font-family:var(--f-mono);color:var(--pri);transition:all .15s;pointer-events:auto}
+.cc-toggle:hover{background:var(--pri);color:#000;transform:translateX(-50%) scale(1.1)}
+/* Search overlay on canvas */
+.cvs-search{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:70;width:280px;max-width:calc(100vw - 120px)}
+.cvs-search-input{width:100%;padding:8px 12px 8px 32px;background:var(--bg1);border:1px solid var(--bdr);border-radius:20px;color:var(--t1);font-size:12px;font-family:var(--f-body);outline:none;backdrop-filter:blur(8px);box-shadow:0 4px 16px rgba(0,0,0,.3);transition:border .2s}
+.cvs-search-input:focus{border-color:var(--pri);box-shadow:0 4px 16px rgba(0,0,0,.3),0 0 0 2px rgba(20,184,166,.15)}
+.cvs-search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--t3);pointer-events:none}
+.cvs-search-results{margin-top:4px;background:var(--bg1);border:1px solid var(--bdr);border-radius:10px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:200px;overflow-y:auto}
+.cvs-search-item{display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:11px;cursor:pointer;transition:background .1s;border-bottom:1px solid var(--bdr)}
+.cvs-search-item:last-child{border-bottom:none}
+.cvs-search-item:hover,.cvs-search-item.active{background:var(--bg3)}
+.cvs-search-item .s-av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:var(--f-display);flex-shrink:0}
+/* Highlight ring animation */
+@keyframes highlightPulse{0%{box-shadow:0 0 0 0 rgba(20,184,166,.5)}50%{box-shadow:0 0 0 12px rgba(20,184,166,0)}100%{box-shadow:0 0 0 0 rgba(20,184,166,0)}}
+.cc.highlighted{border-color:var(--pri)!important;animation:highlightPulse 1.5s ease-out 3}
 .conn-svg{position:absolute;top:0;left:0;pointer-events:none;z-index:5}
 @keyframes flowDash{from{stroke-dashoffset:20}to{stroke-dashoffset:0}}
 .zm{position:absolute;bottom:14px;right:14px;display:flex;flex-direction:column;gap:3px;z-index:60;backdrop-filter:blur(8px)}
@@ -844,6 +880,22 @@ function CanvasView({pp,marriages=[],onSel,selId,onPos,savedPos}){
   const wr=useRef(null);const[pos,setPos]=useState({});const[pan,setPan]=useState({x:0,y:0});const[zm,setZm]=useState(.5);
   const[drag,setDrag]=useState(null);const[panning,setPanning]=useState(false);const[didD,setDidD]=useState(false);
   const ps=useRef({});const ds=useRef({});const fitted=useRef(false);const pinch=useRef(null);
+  // Expand/collapse state
+  const[collapsed,setCollapsed]=useState(()=>{
+    // Default: collapse nodes deeper than 3 generations if tree is large
+    const s=new Set();if(pp.length>20){pp.forEach(p=>{const g=FE.gen(pp,p.id);if(g>=2&&FE.ch(pp,p.id).length>0)s.add(p.id)})}return s});
+  const toggleCollapse=useCallback((pid)=>{setCollapsed(prev=>{const n=new Set(prev);if(n.has(pid))n.delete(pid);else n.add(pid);return n})},[]);
+  // Search & focus state
+  const[csq,setCsq]=useState("");const[csResults,setCsResults]=useState([]);const[csIdx,setCsIdx]=useState(-1);const[highlightId,setHighlightId]=useState(null);
+  const csRef=useRef(null);
+  useEffect(()=>{if(!csq.trim()){setCsResults([]);setCsIdx(-1);return}const q=csq.toLowerCase();setCsResults(pp.filter(p=>p.name.toLowerCase().includes(q)).slice(0,8));setCsIdx(-1)},[csq,pp]);
+  const focusNode=useCallback((person)=>{
+    const el=wr.current;if(!el)return;
+    // Uncollapse ancestors so node is visible
+    setCollapsed(prev=>{const n=new Set(prev);let cur=pp.find(x=>x.id===person.id);while(cur&&cur.parentId){n.delete(cur.parentId);cur=pp.find(x=>x.id===cur.parentId)}return n});
+    // Wait for layout recalc then pan to node
+    setTimeout(()=>{const pt=pos[person.id];if(!pt)return;const vw=el.clientWidth,vh=el.clientHeight;const nz=Math.max(zm,0.6);const tcx=pt.x+CW/2,tcy=pt.y+CH/2;setZm(nz);setPan({x:vw/2-tcx*nz,y:vh/2-tcy*nz});setHighlightId(person.id);setCsq("");setCsResults([]);setTimeout(()=>setHighlightId(null),5000)},100)},[pos,zm,pp]);
+  const csKeyDown=e=>{if(e.key==="ArrowDown"){e.preventDefault();setCsIdx(i=>Math.min(i+1,csResults.length-1))}else if(e.key==="ArrowUp"){e.preventDefault();setCsIdx(i=>Math.max(i-1,0))}else if(e.key==="Enter"&&csIdx>=0&&csResults[csIdx]){focusNode(csResults[csIdx])}else if(e.key==="Escape"){setCsq("");setCsResults([])}};
   // Fit all cards into viewport
   const fitAll=useCallback((p)=>{
     const el=wr.current;if(!el||!Object.keys(p).length)return;
@@ -871,11 +923,11 @@ function CanvasView({pp,marriages=[],onSel,selId,onPos,savedPos}){
   },[pp]);
   useEffect(()=>{
     let p;
-    if(savedPos&&Object.keys(savedPos).length>=pp.length){p=savedPos}else{p=autoLayout(pp,marriages);onPos(p)}
+    if(!collapsed.size&&savedPos&&Object.keys(savedPos).length>=pp.length){p=savedPos}else{p=autoLayout(pp,marriages,collapsed);onPos(p)}
     setPos(p);
     fitted.current=false;
     requestAnimationFrame(()=>requestAnimationFrame(()=>{comfortView(p);fitted.current=true}));
-  },[pp]);
+  },[pp,collapsed]);
   useEffect(()=>{if(fitted.current&&Object.keys(pos).length>0)onPos(pos)},[pos]);
   const conns=useMemo(()=>getConns(pp,pos,marriages),[pp,pos,marriages]);
   const bnd=useMemo(()=>{let mx=0,my=0;Object.values(pos).forEach(p=>{mx=Math.max(mx,p.x+CW+200);my=Math.max(my,p.y+CH+200)});return{w:Math.max(mx,2000),h:Math.max(my,1200)}},[pos]);
@@ -896,7 +948,9 @@ function CanvasView({pp,marriages=[],onSel,selId,onPos,savedPos}){
   const lastTap=useRef(0);
   const dblZoom=useCallback((e,p)=>{const el=wr.current;if(!el)return;const vw=el.clientWidth,vh=el.clientHeight;const pt=pos[p.id];if(!pt)return;const nz=zm<0.5?0.7:zm<0.8?1:0.45;const tcx=pt.x+CW/2,tcy=pt.y+CH/2;setZm(nz);setPan({x:vw/2-tcx*nz,y:vh/2-tcy*nz})},[pos,zm]);
   const handleCardClick=(e,p)=>{e.stopPropagation();if(didD)return;const now=Date.now();if(now-lastTap.current<350){dblZoom(e,p);lastTap.current=0}else{lastTap.current=now;onSel(p)}};
-  const fit=()=>{const a=autoLayout(pp,marriages);setPos(a);onPos(a);requestAnimationFrame(()=>fitAll(a))};
+  const fit=()=>{const a=autoLayout(pp,marriages,collapsed);setPos(a);onPos(a);requestAnimationFrame(()=>fitAll(a))};
+  const expandAll=()=>setCollapsed(new Set());
+  const collapseAll=()=>{const s=new Set();pp.forEach(p=>{if(FE.ch(pp,p.id).length)s.add(p.id)});setCollapsed(s)};
   if(!pp.length)return<div className="empty"><h3>Mulai dari sini</h3><p>Tambahkan anggota pertama atau muat data demo</p></div>;
   return(<div ref={wr} className={`cvs ${panning?"grabbing":""}`} onMouseDown={onPS} onTouchStart={onPS}>
     <div className="cvs-inner" style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zm})`,width:bnd.w,height:bnd.h}}>
@@ -925,9 +979,14 @@ function CanvasView({pp,marriages=[],onSel,selId,onPos,savedPos}){
           <circle cx={c.x2} cy={c.y2} r="3.5" fill={clr} opacity=".3"/><circle cx={c.x2} cy={c.y2} r="1.5" fill={clr} opacity=".7"/>
         </g>}
         return null})}</svg>
-      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];const gl=GL[g]||{l:`Gen ${g+1}`};const bd=p.birthDate?new Date(p.birthDate).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}):"";const alive=!p.deathDate;return(<div key={p.id} className={`cc ${p.gender} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""}`} style={{left:po.x,top:po.y}} onMouseDown={e=>dS(e,p.id)} onTouchStart={e=>dS(e,p.id)} onClick={e=>handleCardClick(e,p)}><div className="cc-bar"/><div className="cc-body"><div className={`cc-av ${p.gender}`}>{ini(p.name)}<div className="cc-status" style={{background:alive?"#22c55e":"var(--t3)"}}/></div><div className="cc-info"><div className="cc-name">{p.name}</div><div className="cc-meta">{p.gender==="male"?"♂":"♀"}{bd?` · ${bd}`:""}{!alive?" · Alm.":""}</div>{p.location?.address&&<div className="cc-meta">📍 {p.location.address.split(",")[0]}</div>}</div></div><div className="cc-gen" style={{background:c}}>{g+1}</div></div>)})}
+      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];const gl=GL[g]||{l:`Gen ${g+1}`};const bd=p.birthDate?new Date(p.birthDate).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}):"";const alive=!p.deathDate;const chCount=FE.ch(pp,p.id).length;const isCol=collapsed.has(p.id);const descCount=isCol?FE.desc(pp,p.id):0;return(<div key={p.id} className={`cc ${p.gender} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""} ${highlightId===p.id?"highlighted":""}`} style={{left:po.x,top:po.y}} onMouseDown={e=>dS(e,p.id)} onTouchStart={e=>dS(e,p.id)} onClick={e=>handleCardClick(e,p)}><div className="cc-bar"/><div className="cc-body"><div className={`cc-av ${p.gender}`}>{ini(p.name)}<div className="cc-status" style={{background:alive?"#22c55e":"var(--t3)"}}/></div><div className="cc-info"><div className="cc-name">{p.name}</div><div className="cc-meta">{p.gender==="male"?"♂":"♀"}{bd?` · ${bd}`:""}{!alive?" · Alm.":""}</div>{p.location?.address&&<div className="cc-meta">📍 {p.location.address.split(",")[0]}</div>}</div></div><div className="cc-gen" style={{background:c}}>{g+1}</div>{chCount>0&&<div className="cc-toggle" onClick={e=>{e.stopPropagation();toggleCollapse(p.id)}} title={isCol?`Tampilkan ${descCount} keturunan`:"Sembunyikan"}>{isCol?`+${descCount}`:"\u2212"}</div>}</div>)})}
     </div>
-    <div className="zm"><button onClick={()=>setZm(z=>Math.min(2.5,z+.12))}>+</button><button onClick={()=>setZm(z=>Math.max(.1,z-.12))}>−</button><button onClick={fit} title="Fit semua"><Ic.Fit/></button><button onClick={()=>comfortView(pos)} title="Zoom nyaman" style={{fontSize:10}}>🏠</button><div style={{fontSize:8,textAlign:"center",color:"var(--t3)",fontFamily:"var(--f-mono)"}}>{Math.round(zm*100)}%</div></div>
+    {/* Search overlay */}
+    <div className="cvs-search"><div style={{position:"relative"}}><span className="cvs-search-icon"><Ic.Search/></span><input ref={csRef} className="cvs-search-input" placeholder="Cari anggota..." value={csq} onChange={e=>setCsq(e.target.value)} onKeyDown={csKeyDown}/></div>
+      {csResults.length>0&&<div className="cvs-search-results">{csResults.map((r,i)=><div key={r.id} className={`cvs-search-item ${i===csIdx?"active":""}`} onClick={()=>focusNode(r)}><div className={`s-av ${r.gender}`} style={{background:r.gender==="male"?"var(--male-bg)":"var(--fem-bg)",color:r.gender==="male"?"var(--male-t)":"var(--fem-t)",border:`1px solid ${r.gender==="male"?"var(--male-bdr)":"var(--fem-bdr)"}`}}>{ini(r.name)}</div><div><div style={{fontWeight:600}}>{r.name}</div><div style={{fontSize:9,color:"var(--t3)"}}>{r.gender==="male"?"♂":"♀"} · Gen {FE.gen(pp,r.id)+1}</div></div></div>)}</div>}
+    </div>
+    {/* Zoom + collapse controls */}
+    <div className="zm"><button onClick={()=>setZm(z=>Math.min(2.5,z+.12))}>+</button><button onClick={()=>setZm(z=>Math.max(.1,z-.12))}>−</button><button onClick={fit} title="Fit semua"><Ic.Fit/></button><button onClick={()=>comfortView(pos)} title="Zoom nyaman" style={{fontSize:10}}>🏠</button><button onClick={expandAll} title="Buka semua" style={{fontSize:9}}>⬇</button><button onClick={collapseAll} title="Tutup semua" style={{fontSize:9}}>⬆</button><div style={{fontSize:8,textAlign:"center",color:"var(--t3)",fontFamily:"var(--f-mono)"}}>{Math.round(zm*100)}%</div></div>
     <div className="mm"><svg width="150" height="80" viewBox={`0 0 ${bnd.w} ${bnd.h}`}>{pp.map(p=>{const po=pos[p.id];return po?<rect key={p.id} x={po.x} y={po.y} width={CW} height={CH} rx="3" fill={p.gender==="male"?"var(--male-t)":"var(--fem-t)"} opacity=".35"/>:null})}</svg></div>
   </div>);
 }
