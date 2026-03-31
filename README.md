@@ -55,6 +55,7 @@ Or use the deploy script:
 bash deploy.sh              # Login + deploy + health check
 ```
 
+Frontend: `https://nasab.biz.id`
 API: `https://nasab-api.sopian-hadianto.workers.dev`
 
 #### Frontend Development

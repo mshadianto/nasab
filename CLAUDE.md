@@ -14,7 +14,7 @@ NASAB ("Jaga Nasabmu") is a family tree SaaS platform for Indonesia. It has two 
 All error messages are in Indonesian (Bahasa).
 
 **Frontend** — two variants of the same SPA, **not identical**:
-- `frontend/nasab.jsx` — **Production build** with API layer. Connects to `https://nasab-api.sopian-hadianto.workers.dev`. Uses `localStorage` for token storage. Built with Vite + React 19 (`frontend/package.json`).
+- `frontend/nasab.jsx` — **Production build** with API layer. Connects to `https://nasab-api.sopian-hadianto.workers.dev`. Hosted at `https://nasab.biz.id`. Uses `localStorage` for token storage. Built with Vite + React 19 (`frontend/package.json`).
 - `nasab.jsx` (root) — **Claude artifact version**. Uses `window.storage` API (Claude artifact sandbox) instead of a real backend. Self-contained, no API calls.
 
 Key internal modules (shared by both variants):
