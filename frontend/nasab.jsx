@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const APP = { name: "NASAB", tagline: "Jaga Nasabmu", domain: "nasab.id", version: __APP_VERSION__, build: __APP_BUILD__, developer: { name: "M Sopian Hadianto", role: "GRC Expert & AI-Powered Builder", org: "Labbaik AI" } };
 const SK = "nasab-v5";
-const CW = 158, CH = 86, GX = 36, GY = 120, CG = 10;
+const CW = 150, CH = 80, GX = 24, GY = 100, CG = 8;
 const VW = { CANVAS:"canvas",MAP:"map",LIST:"list",STATS:"stats",TIMELINE:"timeline",INSIGHTS:"insights" };
 const RL = { OWNER:"owner",EDITOR:"editor",VIEWER:"viewer" };
 const GL = [{l:"Kakek/Nenek",i:"👴"},{l:"Ayah/Ibu",i:"👨‍👩‍👧‍👦"},{l:"Anak",i:"🧒"},{l:"Cucu",i:"👶"},{l:"Cicit",i:"🌱"},{l:"Canggah",i:"🌿"}];
@@ -264,7 +264,7 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 .gl-strip{position:absolute;left:0;top:0;bottom:0;width:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;z-index:2;padding:4px 2px;background:linear-gradient(90deg,rgba(7,9,14,.9) 60%,transparent)}
 .gl-emoji{font-size:16px}.gl-title{font-size:7px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;text-align:center;max-width:44px;line-height:1.2}.gl-num{font-size:6px;opacity:.4;font-family:var(--f-mono)}
 .gl-bg{position:absolute;left:0;right:0;top:0;bottom:0;opacity:.02;border-top:1px dashed;border-bottom:1px dashed}
-.cc{position:absolute;width:${CW}px;min-height:${CH}px;background:var(--bg2);border:1.5px solid var(--bdr);border-radius:var(--r);cursor:grab;user-select:none;transition:box-shadow .2s;overflow:hidden;z-index:10}
+.cc{position:absolute;width:150px;min-height:80px;background:var(--bg2);border:1.5px solid var(--bdr);border-radius:var(--r);cursor:grab;user-select:none;transition:box-shadow .2s;overflow:hidden;z-index:10}
 .cc:hover{z-index:20;box-shadow:0 6px 24px rgba(0,0,0,.4)}.cc.dragging{z-index:50;box-shadow:0 10px 36px rgba(0,0,0,.5);opacity:.92;cursor:grabbing}.cc.selected{border-color:var(--pri);box-shadow:0 0 20px rgba(20,184,166,.12)}
 .cc.male{border-color:var(--male-bdr)}.cc.female{border-color:var(--fem-bdr)}
 .cc-bar{height:2px;width:100%}.cc.male .cc-bar{background:linear-gradient(90deg,var(--male-t),transparent)}.cc.female .cc-bar{background:linear-gradient(90deg,var(--fem-t),transparent)}
@@ -786,18 +786,18 @@ function CanvasView({pp,onSel,selId,onPos,savedPos}){
     let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
     Object.values(p).forEach(pt=>{minX=Math.min(minX,pt.x);minY=Math.min(minY,pt.y);maxX=Math.max(maxX,pt.x+CW);maxY=Math.max(maxY,pt.y+CH)});
     if(minX===Infinity)return;
-    const tw=maxX-minX+80,th=maxY-minY+80;
-    const z=Math.min(Math.max(vw/tw,0.15),Math.min(vh/th,1.2));
-    const cx=(minX+maxX)/2,cy=(minY+maxY)/2;
-    setZm(z);setPan({x:vw/2-cx*z,y:vh/2-cy*z});
+    const pad=60;const tw=maxX-minX+pad*2,th=maxY-minY+pad*2;
+    const z=Math.max(0.12,Math.min(1,Math.min(vw/tw,vh/th)));
+    const tcx=(minX+maxX)/2,tcy=(minY+maxY)/2;
+    setZm(z);setPan({x:vw/2-tcx*z,y:vh/2-tcy*z});
   },[]);
   useEffect(()=>{
     let p;
     if(savedPos&&Object.keys(savedPos).length>=pp.length){p=savedPos}else{p=autoLayout(pp);onPos(p)}
     setPos(p);
-    // Auto fit-to-view on first load (use rAF to ensure DOM measured)
+    // Auto fit-to-view on first load (double rAF to ensure DOM painted & measured)
     fitted.current=false;
-    requestAnimationFrame(()=>{fitToView(p);fitted.current=true});
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{fitToView(p);fitted.current=true}));
   },[pp]);
   useEffect(()=>{if(fitted.current&&Object.keys(pos).length>0)onPos(pos)},[pos]);
   const conns=useMemo(()=>getConns(pp,pos),[pp,pos]);
@@ -815,7 +815,7 @@ function CanvasView({pp,onSel,selId,onPos,savedPos}){
     <div className="cvs-inner" style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zm})`,width:bnd.w,height:bnd.h}}>
       {Object.entries(gls).map(([g,lane])=>{const gi=parseInt(g);const gl=GL[gi]||{l:`Gen ${gi+1}`,i:"👤"};const c=GC[gi%GC.length];return(<div key={g} className="gl" style={{top:lane.mi-22,height:lane.mx-lane.mi+44}}><div className="gl-bg" style={{borderColor:c,background:c}}/><div className="gl-strip" style={{color:c}}><span className="gl-emoji">{gl.i}</span><span className="gl-title">{gl.l}</span><span className="gl-num">Gen {gi+1}</span></div></div>)})}
       <svg className="conn-svg" width={bnd.w} height={bnd.h}>{conns.map((c,i)=>{if(c.t==="sp"){const mx=(c.x1+c.x2)/2;return<g key={i}><line x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--rose)" strokeWidth="1.5" strokeDasharray="5,4" opacity=".45"/><circle cx={mx} cy={c.y1} r="3.5" fill="var(--rose)" opacity=".5"/><text x={mx} y={c.y1-7} textAnchor="middle" fontSize="6" fill="var(--rose)" fontWeight="600" fontFamily="var(--f-mono)" opacity=".6">NIKAH</text></g>}return<line key={i} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--bdr2)" strokeWidth="1.5"/>})}</svg>
-      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];return(<div key={p.id} className={`cc ${p.gender} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""}`} style={{left:po.x,top:po.y}} onMouseDown={e=>dS(e,p.id)} onTouchStart={e=>dS(e,p.id)} onClick={e=>cC(e,p)}><div className="cc-bar"/><div className="cc-body"><div className={`cc-av ${p.gender}`}>{ini(p.name)}</div><div className="cc-info"><div className="cc-name">{p.name}</div><div className="cc-meta">{p.gender==="male"?"♂":"♀"}{p.location?.address?` · ${p.location.address.split(",")[0]}`:""}</div></div></div><div className="cc-gen" style={{background:c}}/></div>)})}
+      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];const bd=p.birthDate?new Date(p.birthDate).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}):"";return(<div key={p.id} className={`cc ${p.gender} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""}`} style={{left:po.x,top:po.y}} onMouseDown={e=>dS(e,p.id)} onTouchStart={e=>dS(e,p.id)} onClick={e=>cC(e,p)}><div className="cc-bar"/><div className="cc-body"><div className={`cc-av ${p.gender}`}>{ini(p.name)}</div><div className="cc-info"><div className="cc-name">{p.name}</div><div className="cc-meta">{p.gender==="male"?"♂":"♀"}{bd?` · ${bd}`:""}{p.deathDate?" · Alm.":""}</div>{p.location?.address&&<div className="cc-meta">📍 {p.location.address.split(",")[0]}</div>}</div></div><div className="cc-gen" style={{background:c}}/></div>)})}
     </div>
     <div className="zm"><button onClick={()=>setZm(z=>Math.min(2.5,z+.1))}>+</button><button onClick={()=>setZm(z=>Math.max(.12,z-.1))}>−</button><button onClick={fit}><Ic.Fit/></button><div style={{fontSize:8,textAlign:"center",color:"var(--t3)",fontFamily:"var(--f-mono)"}}>{Math.round(zm*100)}%</div></div>
     <div className="mm"><svg width="150" height="80" viewBox={`0 0 ${bnd.w} ${bnd.h}`}>{pp.map(p=>{const po=pos[p.id];return po?<rect key={p.id} x={po.x} y={po.y} width={CW} height={CH} rx="3" fill={p.gender==="male"?"var(--male-t)":"var(--fem-t)"} opacity=".35"/>:null})}</svg></div>
