@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 // Tech-forward • Multi-Tenant • RBAC • Geotagging • AI-ready Architecture
 // ═══════════════════════════════════════════════════════════════════════
 
-const APP = { name: "NASAB", tagline: "Jaga Nasabmu", domain: "nasab.id", version: "5.0" };
+const APP = { name: "NASAB", tagline: "Jaga Nasabmu", domain: "nasab.id", version: __APP_VERSION__, build: __APP_BUILD__, developer: { name: "M Sopian Hadianto", role: "GRC Expert & AI-Powered Builder", org: "Labbaik AI" } };
 const SK = "nasab-v5";
 const CW = 158, CH = 86, GX = 36, GY = 120, CG = 10;
 const VW = { CANVAS:"canvas",MAP:"map",LIST:"list",STATS:"stats",TIMELINE:"timeline",INSIGHTS:"insights" };
@@ -343,6 +343,12 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 .role-super_admin{background:#7c3aed22;color:#a78bfa}
 .role-admin{background:#6366f122;color:#818cf8}
 .role-user{background:var(--bg3);color:var(--t2)}
+/* Dev Footer */
+.dev-footer{padding:16px 20px;border-top:1px solid var(--bdr);text-align:center;font-size:10px;color:var(--t3);line-height:1.8;flex-shrink:0}
+.dev-footer a{color:var(--pri);text-decoration:none}.dev-footer a:hover{text-decoration:underline}
+.dev-footer .dev-name{font-weight:600;color:var(--t2)}
+.dev-footer .dev-org{color:var(--acc)}
+.dev-footer .dev-ver{font-family:var(--f-mono);font-size:9px;color:var(--t3);margin-top:2px}
 /* Faraidh */
 .far-w{padding:16px;max-width:700px;margin:0 auto}
 .far-sel{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
@@ -580,6 +586,7 @@ const Ic={
   Back:()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>,
 };
 const ini=n=>n.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+function DevFooter(){return(<div className="dev-footer"><span className="dev-name">{APP.developer.name}</span> — {APP.developer.role} · <span className="dev-org">{APP.developer.org}</span><div className="dev-ver">{APP.name} v{APP.version} · Build {APP.build}</div></div>)}
 
 // ═══════════════════════════════════════════════════════════════
 // AUTH — Landing Page + Login/Register
@@ -628,6 +635,7 @@ function AuthScreen({onLogin}){
             <div className="auth-trust-item">☁️ <b>Cloud Sync</b></div>
             <div className="auth-trust-item">🇮🇩 <b>Indonesia-first</b></div>
           </div>
+          <DevFooter/>
         </div>
       </div>
     </div>
@@ -669,7 +677,7 @@ function Dashboard({user,onSelectFamily,onLogout,onCreateFamily,onAdmin}){
         {fams.map(f=>{const r=rc[f.myRole]||rc.viewer;return(<div key={f.id} className="fam-card" onClick={()=>onSelectFamily(f)}><div className="fam-card-bar"/><span className="fam-card-role" style={{background:r.bg,color:r.c}}>{f.myRole}</span><h3>{f.name}</h3><p>{f.description||"Silsilah keluarga"}</p><div className="fam-card-stats"><span>👥 {f.member_count||f.members?.length||0}</span><span>📍 {f.geo_count||(f.members||[]).filter(m=>m.location?.lat).length||0}</span></div></div>)})}
         <div className="fam-card fam-new" onClick={()=>setShow(true)}><span style={{fontSize:24,color:"var(--pri)"}}>+</span><span style={{fontSize:12,fontWeight:600}}>Buat Silsilah Baru</span></div>
       </div>
-    </div></div>
+    </div><DevFooter/></div>
     {show&&<div className="modal-ov" onClick={()=>setShow(false)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="m-hdr"><h2>Silsilah Baru</h2><button className="btn btn-icon btn-ghost" onClick={()=>setShow(false)}><Ic.X/></button></div><div className="m-body"><div className="fg"><label className="fl">Nama Keluarga *</label><input className="fi" value={nn} onChange={e=>setNn(e.target.value)} placeholder="Keluarga Besar ..." autoFocus/></div><div className="fg"><label className="fl">Deskripsi</label><textarea className="fta" value={nd} onChange={e=>setNd(e.target.value)} placeholder="Deskripsi..."/></div></div><div className="m-ftr"><button className="btn" onClick={()=>setShow(false)}>Batal</button><button className="btn btn-p" onClick={create} disabled={!nn.trim()}>Buat</button></div></div></div>}
   </div>);
 }

@@ -174,4 +174,4 @@ Tables: users, families, family_collaborators, members (+ nik column), stories, 
 
 ### Built By
 M Sopian Hadianto — GRC Expert & AI-Powered Builder
-Labbaik AI • KIM Consulting
+Labbaik AI

@@ -329,7 +329,7 @@ export default {
 
       // ── HEALTH ──
       if (path === '/api/health') {
-        return json({ status: 'ok', app: 'NASAB API', version: '5.0', timestamp: new Date().toISOString() });
+        return json({ status: 'ok', app: 'NASAB API', version: '5.0.0', developer: 'M Sopian Hadianto', org: 'Labbaik AI', timestamp: new Date().toISOString() });
       }
 
       // ── 404 ──
