@@ -1,0 +1,12 @@
+{
+  "name": "nasab-api",
+  "main": "src/index.js",
+  "compatibility_date": "2024-12-01",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nasab-db",
+      "database_id": "745e2555-b659-4eb7-bc60-5a705eb6a15a"
+    }
+  ]
+}
