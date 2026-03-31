@@ -63,7 +63,8 @@ export default {
     try {
       // ── AUTH ──
       if (path === '/api/auth/register' && method === 'POST') {
-        const { name, email, password } = await request.json();
+        const body = await request.json();
+        const name = (body.name || '').trim(), email = (body.email || '').trim(), password = (body.password || '').trim();
         if (!name || !email || !password) return err('Semua field wajib diisi');
         const existing = await DB.prepare('SELECT id FROM users WHERE email = ?').bind(email.toLowerCase()).first();
         if (existing) return err('Email sudah terdaftar');
@@ -75,7 +76,8 @@ export default {
       }
 
       if (path === '/api/auth/login' && method === 'POST') {
-        const { email, password } = await request.json();
+        const body = await request.json();
+        const email = (body.email || '').trim(), password = (body.password || '').trim();
         if (!email || !password) return err('Email dan password wajib');
         const user = await DB.prepare('SELECT * FROM users WHERE email = ?').bind(email.toLowerCase()).first();
         if (!user) return err('Email atau password salah', 401);
@@ -93,7 +95,8 @@ export default {
 
       // ── FORGOT PASSWORD ──
       if (path === '/api/auth/reset-password' && method === 'POST') {
-        const { email, name, new_password } = await request.json();
+        const body = await request.json();
+        const email = (body.email || '').trim(), name = (body.name || '').trim(), new_password = (body.new_password || '').trim();
         if (!email || !name || !new_password) return err('Semua field wajib diisi');
         if (new_password.length < 6) return err('Password minimal 6 karakter');
         const user = await DB.prepare('SELECT * FROM users WHERE email = ?').bind(email.toLowerCase()).first();
