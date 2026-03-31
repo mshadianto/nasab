@@ -109,17 +109,9 @@ export default {
         const user = await getAuthUser(request, DB);
         if (!user) return err('Unauthorized', 401);
         const rows = isAdmin(user)
-          ? await DB.prepare(`SELECT f.*, COALESCE(fc.role, 'admin_view') as my_role FROM families f LEFT JOIN family_collaborators fc ON f.id = fc.family_id AND fc.user_id = ? ORDER BY f.updated_at DESC`).bind(user.id).all()
-          : await DB.prepare(`SELECT f.*, fc.role as my_role FROM families f JOIN family_collaborators fc ON f.id = fc.family_id WHERE fc.user_id = ? ORDER BY f.updated_at DESC`).bind(user.id).all();
-        // Enrich with member count
-        const families = [];
-        for (const f of rows.results) {
-          const mc = await DB.prepare('SELECT COUNT(*) as c FROM members WHERE family_id = ?').bind(f.id).first();
-          const gc = await DB.prepare('SELECT COUNT(*) as c FROM members WHERE family_id = ? AND location_lat IS NOT NULL').bind(f.id).first();
-          const cc = await DB.prepare('SELECT COUNT(*) as c FROM family_collaborators WHERE family_id = ?').bind(f.id).first();
-          families.push({ ...f, member_count: mc.c, geo_count: gc.c, collab_count: cc.c });
-        }
-        return json({ families });
+          ? await DB.prepare(`SELECT f.*, COALESCE(fc2.role, 'admin_view') as my_role, COUNT(DISTINCT m.id) as member_count, COUNT(DISTINCT CASE WHEN m.location_lat IS NOT NULL THEN m.id END) as geo_count, COUNT(DISTINCT fc.id) as collab_count FROM families f LEFT JOIN family_collaborators fc2 ON f.id = fc2.family_id AND fc2.user_id = ? LEFT JOIN members m ON f.id = m.family_id LEFT JOIN family_collaborators fc ON f.id = fc.family_id GROUP BY f.id ORDER BY f.updated_at DESC`).bind(user.id).all()
+          : await DB.prepare(`SELECT f.*, fc2.role as my_role, COUNT(DISTINCT m.id) as member_count, COUNT(DISTINCT CASE WHEN m.location_lat IS NOT NULL THEN m.id END) as geo_count, COUNT(DISTINCT fc.id) as collab_count FROM families f JOIN family_collaborators fc2 ON f.id = fc2.family_id AND fc2.user_id = ? LEFT JOIN members m ON f.id = m.family_id LEFT JOIN family_collaborators fc ON f.id = fc.family_id WHERE fc2.user_id = ? GROUP BY f.id ORDER BY f.updated_at DESC`).bind(user.id, user.id).all();
+        return json({ families: rows.results });
       }
 
       if (path === '/api/families' && method === 'POST') {
@@ -139,19 +131,21 @@ export default {
         const user = await getAuthUser(request, DB);
         if (!user) return err('Unauthorized', 401);
         const fid = famMatch[1];
-        const collab = await DB.prepare('SELECT * FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
+        const [collab, family, membersR, collabsR, storiesR, posR, invitesR] = await Promise.all([
+          DB.prepare('SELECT * FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first(),
+          DB.prepare('SELECT * FROM families WHERE id = ?').bind(fid).first(),
+          DB.prepare('SELECT * FROM members WHERE family_id = ? ORDER BY created_at').bind(fid).all(),
+          DB.prepare('SELECT fc.*, u.name, u.email FROM family_collaborators fc JOIN users u ON fc.user_id = u.id WHERE fc.family_id = ?').bind(fid).all(),
+          DB.prepare('SELECT * FROM stories WHERE family_id = ? ORDER BY created_at DESC').bind(fid).all(),
+          DB.prepare('SELECT * FROM canvas_positions WHERE family_id = ?').bind(fid).all(),
+          DB.prepare('SELECT * FROM invites WHERE family_id = ?').bind(fid).all()
+        ]);
         if (!collab && !isAdmin(user)) return err('Akses ditolak', 403);
-        const family = await DB.prepare('SELECT * FROM families WHERE id = ?').bind(fid).first();
         if (!family) return err('Tidak ditemukan', 404);
-        const members = (await DB.prepare('SELECT * FROM members WHERE family_id = ? ORDER BY created_at').bind(fid).all()).results;
-        const collaborators = (await DB.prepare('SELECT fc.*, u.name, u.email FROM family_collaborators fc JOIN users u ON fc.user_id = u.id WHERE fc.family_id = ?').bind(fid).all()).results;
-        const stories = (await DB.prepare('SELECT * FROM stories WHERE family_id = ? ORDER BY created_at DESC').bind(fid).all()).results;
-        const positions = (await DB.prepare('SELECT * FROM canvas_positions WHERE family_id = ?').bind(fid).all()).results;
-        const invites = (await DB.prepare('SELECT * FROM invites WHERE family_id = ?').bind(fid).all()).results;
         const posMap = {};
-        positions.forEach(p => { posMap[p.member_id] = { x: p.x, y: p.y }; });
+        posR.results.forEach(p => { posMap[p.member_id] = { x: p.x, y: p.y }; });
         const my_role = collab ? collab.role : (isSuperAdmin(user) ? 'owner' : 'viewer');
-        return json({ family, members, collaborators, stories, positions: posMap, invites, my_role });
+        return json({ family, members: membersR.results, collaborators: collabsR.results, stories: storiesR.results, positions: posMap, invites: invitesR.results, my_role });
       }
 
       // ── MEMBERS CRUD ──
@@ -278,13 +272,8 @@ export default {
       if (path === '/api/admin/users' && method === 'GET') {
         const user = await getAuthUser(request, DB);
         if (!user || !isAdmin(user)) return err('Admin access required', 403);
-        const users = (await DB.prepare('SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC').all()).results;
-        const enriched = [];
-        for (const u of users) {
-          const fc = await DB.prepare('SELECT COUNT(*) as c FROM family_collaborators WHERE user_id = ?').bind(u.id).first();
-          enriched.push({ ...u, familyCount: fc.c });
-        }
-        return json({ users: enriched });
+        const users = (await DB.prepare('SELECT u.id, u.name, u.email, u.role, u.created_at, COUNT(DISTINCT fc.family_id) as familyCount FROM users u LEFT JOIN family_collaborators fc ON u.id = fc.user_id GROUP BY u.id ORDER BY u.created_at DESC').all()).results;
+        return json({ users });
       }
 
       const adminUserRole = path.match(/^\/api\/admin\/users\/([^/]+)\/role$/);
@@ -317,14 +306,8 @@ export default {
       if (path === '/api/admin/families' && method === 'GET') {
         const user = await getAuthUser(request, DB);
         if (!user || !isAdmin(user)) return err('Admin access required', 403);
-        const families = (await DB.prepare('SELECT f.*, u.name as owner_name FROM families f JOIN users u ON f.owner_id = u.id ORDER BY f.updated_at DESC').all()).results;
-        const enriched = [];
-        for (const f of families) {
-          const mc = await DB.prepare('SELECT COUNT(*) as c FROM members WHERE family_id = ?').bind(f.id).first();
-          const cc = await DB.prepare('SELECT COUNT(*) as c FROM family_collaborators WHERE family_id = ?').bind(f.id).first();
-          enriched.push({ ...f, memberCount: mc.c, collabCount: cc.c });
-        }
-        return json({ families: enriched });
+        const families = (await DB.prepare('SELECT f.*, u.name as owner_name, COUNT(DISTINCT m.id) as memberCount, COUNT(DISTINCT fc.id) as collabCount FROM families f JOIN users u ON f.owner_id = u.id LEFT JOIN members m ON f.id = m.family_id LEFT JOIN family_collaborators fc ON f.id = fc.family_id GROUP BY f.id ORDER BY f.updated_at DESC').all()).results;
+        return json({ families });
       }
 
       // ── HEALTH ──
