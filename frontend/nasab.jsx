@@ -980,7 +980,153 @@ function FaraidhCalc({pp,onClose}){
     </div>:results.faraidh&&results.faraidh.length>0?<FaraidhResultTable results={results.faraidh} total={total} fmt={fmt} label="Pembagian Waris"/>:<div style={{textAlign:"center",padding:20,color:"var(--t3)",fontSize:12}}>Tambahkan ahli waris untuk melihat perhitungan</div>}
     <div style={{marginTop:14,padding:"8px 10px",background:"var(--bg2)",borderRadius:6,fontSize:9,color:"var(--t3)",lineHeight:1.6,fontFamily:"var(--f-mono)"}}>⚖️ Disclaimer: Kalkulator ini menggunakan hukum faraidh dasar + wasiat wajibah (KHI Pasal 209). Untuk kasus kompleks (wasiat, hutang, dll), konsultasikan dengan ahli waris/ulama.</div>
   </div></div></div>)}
-function IEModal({pp,onImport,onClose}){const[j,setJ]=useState("");const[t,setT]=useState("e");return<div className="modal-ov" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()}><div className="m-hdr"><h2>Data</h2><button className="btn btn-icon btn-ghost" onClick={onClose}><Ic.X/></button></div><div className="m-body"><div style={{display:"flex",gap:5,marginBottom:10}}><button className={`btn btn-sm ${t==="e"?"btn-p":""}`} onClick={()=>setT("e")}>Export</button><button className={`btn btn-sm ${t==="i"?"btn-p":""}`} onClick={()=>setT("i")}>Import</button></div>{t==="e"?<textarea className="fta" style={{minHeight:160,fontFamily:"var(--f-mono)",fontSize:9}} readOnly value={JSON.stringify(pp,null,2)}/>:<><textarea className="fta" style={{minHeight:160,fontFamily:"var(--f-mono)",fontSize:9}} value={j} onChange={e=>setJ(e.target.value)} placeholder="Paste JSON..."/><button className="btn btn-p btn-sm" style={{marginTop:6}} onClick={()=>{try{const d=JSON.parse(j);if(Array.isArray(d)){onImport(d);onClose()}}catch{alert("Invalid JSON")}}}>Import</button></>}</div></div></div>}
+// ─── GEDCOM CONVERTER ────────────────────────────────────────
+const GEDCOM={
+  // Export members to GEDCOM 5.5.1
+  toGedcom(pp){
+    const lines=["0 HEAD","1 SOUR NASAB","2 VERS "+APP.version,"2 NAME NASAB - Jaga Nasabmu","1 GEDC","2 VERS 5.5.1","2 FORM LINEAGE-LINKED","1 CHAR UTF-8"];
+    // Build family units: group by parent couples
+    const fams=new Map();
+    pp.forEach(p=>{
+      if(!p.parentId)return;
+      const pa=pp.find(x=>x.id===p.parentId);if(!pa)return;
+      const sp=pa.spouseId?pp.find(x=>x.id===pa.spouseId):null;
+      const fk=pa.id<(sp?.id||"")? `${pa.id}_${sp?.id||""}` : `${sp?.id||""}_${pa.id}`;
+      if(!fams.has(fk))fams.set(fk,{husb:pa.gender==="male"?pa:sp,wife:pa.gender==="female"?pa:sp,children:[]});
+      fams.get(fk).children.push(p);
+    });
+    // Also create FAM for couples without children
+    pp.forEach(p=>{
+      if(!p.spouseId)return;
+      const sp=pp.find(x=>x.id===p.spouseId);if(!sp||p.id>sp.id)return;
+      const fk=p.id<sp.id?`${p.id}_${sp.id}`:`${sp.id}_${p.id}`;
+      if(!fams.has(fk))fams.set(fk,{husb:p.gender==="male"?p:sp,wife:p.gender==="female"?p:sp,children:[]});
+    });
+    // INDI records
+    pp.forEach(p=>{
+      lines.push(`0 @I${p.id}@ INDI`);
+      const names=p.name.split(" ");const gn=names[0];const sn=names.slice(1).join(" ");
+      lines.push(`1 NAME ${gn} /${sn}/`);
+      lines.push(`2 GIVN ${gn}`);if(sn)lines.push(`2 SURN ${sn}`);
+      lines.push(`1 SEX ${p.gender==="male"?"M":"F"}`);
+      if(p.birthDate||p.birthPlace){lines.push("1 BIRT");if(p.birthDate)lines.push(`2 DATE ${GEDCOM._fmtDate(p.birthDate)}`);if(p.birthPlace)lines.push(`2 PLAC ${p.birthPlace}`)}
+      if(p.deathDate){lines.push("1 DEAT");lines.push(`2 DATE ${GEDCOM._fmtDate(p.deathDate)}`)}
+      if(p.notes)lines.push(`1 NOTE ${p.notes}`);
+      if(p.nik)lines.push(`1 REFN ${p.nik}`);
+      if(p.agama&&p.agama!=="islam")lines.push(`1 RELI ${p.agama}`);
+      if(p.location?.lat)lines.push(`1 _LATI ${p.location.lat}`,`1 _LONG ${p.location.lng}`);
+      // Link to FAM as spouse
+      fams.forEach((f,fk)=>{if(f.husb?.id===p.id||f.wife?.id===p.id)lines.push(`1 FAMS @F${fk}@`)});
+      // Link to FAM as child
+      fams.forEach((f,fk)=>{if(f.children.some(c=>c.id===p.id))lines.push(`1 FAMC @F${fk}@`)});
+    });
+    // FAM records
+    fams.forEach((f,fk)=>{
+      lines.push(`0 @F${fk}@ FAM`);
+      if(f.husb)lines.push(`1 HUSB @I${f.husb.id}@`);
+      if(f.wife)lines.push(`1 WIFE @I${f.wife.id}@`);
+      f.children.forEach(c=>lines.push(`1 CHIL @I${c.id}@`));
+    });
+    lines.push("0 TRLR");
+    return lines.join("\n");
+  },
+  _fmtDate(d){if(!d)return"";const p=d.split("-");if(p.length!==3)return d;const mo=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];return`${parseInt(p[2])} ${mo[parseInt(p[1])-1]||"JAN"} ${p[0]}`},
+  _parseDate(d){if(!d)return"";const m=d.match(/(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{4})/i);if(!m)return"";const mo={JAN:"01",FEB:"02",MAR:"03",APR:"04",MAY:"05",JUN:"06",JUL:"07",AUG:"08",SEP:"09",OCT:"10",NOV:"11",DEC:"12"};return`${m[3]}-${mo[m[2].toUpperCase()]||"01"}-${m[1].padStart(2,"0")}`},
+  // Parse GEDCOM text into member array
+  fromGedcom(text){
+    const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    const indis={},famr={};let cur=null,ctx=null,sub=null;
+    lines.forEach(l=>{
+      const lm=l.match(/^(\d+)\s+(.+)/);if(!lm)return;
+      const lv=parseInt(lm[1]),rest=lm[2];
+      if(lv===0){
+        const im=rest.match(/@(I[^@]+)@\s+INDI/);if(im){cur={_id:im[1],name:"",gender:"male",birthDate:"",deathDate:"",birthPlace:"",notes:"",nik:"",agama:"islam",location:null};indis[im[1]]=cur;ctx="INDI";sub=null;return}
+        const fm=rest.match(/@(F[^@]+)@\s+FAM/);if(fm){cur={_id:fm[1],husb:null,wife:null,children:[]};famr[fm[1]]=cur;ctx="FAM";sub=null;return}
+        ctx=null;return;
+      }
+      if(ctx==="INDI"&&cur){
+        if(lv===1){sub=null;const tm=rest.match(/^(\S+)\s*(.*)/);if(!tm)return;const[,tag,val]=tm;
+          if(tag==="NAME"){const nm=val.replace(/\//g,"").trim();cur.name=nm}
+          if(tag==="SEX")cur.gender=val.trim()==="F"?"female":"male";
+          if(tag==="BIRT")sub="BIRT";if(tag==="DEAT")sub="DEAT";
+          if(tag==="NOTE")cur.notes=(cur.notes?cur.notes+" ":"")+val;
+          if(tag==="REFN")cur.nik=val.trim();
+          if(tag==="RELI")cur.agama=val.trim().toLowerCase();
+          if(tag==="_LATI")cur._lat=parseFloat(val);if(tag==="_LONG")cur._lng=parseFloat(val);
+        }
+        if(lv===2){const tm=rest.match(/^(\S+)\s*(.*)/);if(!tm)return;const[,tag,val]=tm;
+          if(sub==="BIRT"&&tag==="DATE")cur.birthDate=GEDCOM._parseDate(val);
+          if(sub==="BIRT"&&tag==="PLAC")cur.birthPlace=val;
+          if(sub==="DEAT"&&tag==="DATE")cur.deathDate=GEDCOM._parseDate(val);
+          if(tag==="GIVN"||tag==="SURN"){}// name already parsed from NAME
+        }
+      }
+      if(ctx==="FAM"&&cur){
+        if(lv===1){const tm=rest.match(/^(\S+)\s*(.*)/);if(!tm)return;const[,tag,val]=tm;const id=val.replace(/@/g,"").trim();
+          if(tag==="HUSB")cur.husb=id;if(tag==="WIFE")cur.wife=id;if(tag==="CHIL")cur.children.push(id);
+        }
+      }
+    });
+    // Build member array with relationships
+    const members=[];const idMap={};
+    Object.values(indis).forEach(p=>{
+      const id=`p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`;
+      idMap[p._id]=id;
+      const m={id,name:p.name,gender:p.gender,birthDate:p.birthDate,deathDate:p.deathDate,birthPlace:p.birthPlace,notes:p.notes,nik:p.nik,agama:p.agama,parentId:null,spouseId:null,location:p._lat?{lat:p._lat,lng:p._lng,address:p.birthPlace||""}:null,photo:"",createdAt:new Date().toISOString()};
+      members.push(m);
+    });
+    // Set relationships from FAM records
+    Object.values(famr).forEach(f=>{
+      const hid=idMap[f.husb],wid=idMap[f.wife];
+      if(hid&&wid){const h=members.find(m=>m.id===hid),w=members.find(m=>m.id===wid);if(h&&w){h.spouseId=wid;w.spouseId=hid}}
+      f.children.forEach(cRef=>{const cid=idMap[cRef];if(!cid)return;const child=members.find(m=>m.id===cid);
+        if(child){if(hid&&members.find(m=>m.id===hid))child.parentId=hid;else if(wid)child.parentId=wid}
+      });
+    });
+    return members;
+  }
+};
+
+function IEModal({pp,onImport,onClose}){const[j,setJ]=useState("");const[t,setT]=useState("ej");const[gedIn,setGedIn]=useState("");const[preview,setPreview]=useState(null);
+  const dlFile=(content,name,type)=>{const b=new Blob([content],{type});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=name;a.click();URL.revokeObjectURL(u)};
+  return<div className="modal-ov" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:560}}><div className="m-hdr"><h2>Import / Export</h2><button className="btn btn-icon btn-ghost" onClick={onClose}><Ic.X/></button></div><div className="m-body">
+    <div style={{display:"flex",gap:4,marginBottom:12,flexWrap:"wrap"}}>
+      {[{id:"ej",l:"Export JSON"},{id:"eg",l:"Export GEDCOM"},{id:"ij",l:"Import JSON"},{id:"ig",l:"Import GEDCOM"}].map(x=>
+        <button key={x.id} className={`btn btn-sm ${t===x.id?"btn-p":""}`} onClick={()=>{setT(x.id);setPreview(null)}}>{x.l}</button>)}
+    </div>
+    {t==="ej"&&<div>
+      <textarea className="fta" style={{minHeight:140,fontFamily:"var(--f-mono)",fontSize:9}} readOnly value={JSON.stringify(pp,null,2)}/>
+      <button className="btn btn-p btn-sm" style={{marginTop:6}} onClick={()=>dlFile(JSON.stringify(pp,null,2),`nasab-export-${Date.now()}.json`,"application/json")}>Download JSON</button>
+    </div>}
+    {t==="eg"&&<div>
+      <textarea className="fta" style={{minHeight:140,fontFamily:"var(--f-mono)",fontSize:9}} readOnly value={GEDCOM.toGedcom(pp)}/>
+      <div style={{display:"flex",gap:6,marginTop:6}}>
+        <button className="btn btn-p btn-sm" onClick={()=>dlFile(GEDCOM.toGedcom(pp),`nasab-export-${Date.now()}.ged`,"text/plain")}>Download .ged</button>
+        <span style={{fontSize:9,color:"var(--t3)",alignSelf:"center"}}>GEDCOM 5.5.1 — kompatibel dengan Gramps, MyHeritage, Ancestry, dll.</span>
+      </div>
+    </div>}
+    {t==="ij"&&<div>
+      <textarea className="fta" style={{minHeight:140,fontFamily:"var(--f-mono)",fontSize:9}} value={j} onChange={e=>setJ(e.target.value)} placeholder="Paste JSON array..."/>
+      <div style={{display:"flex",gap:6,marginTop:6,alignItems:"center"}}>
+        <label className="btn btn-sm" style={{cursor:"pointer"}}><input type="file" accept=".json" hidden onChange={e=>{const f=e.target.files[0];if(f)f.text().then(t=>setJ(t))}}/> Pilih File</label>
+        <button className="btn btn-p btn-sm" onClick={()=>{try{const d=JSON.parse(j);if(Array.isArray(d)){onImport(d);onClose()}}catch{alert("Invalid JSON")}}}>Import</button>
+        <span style={{fontSize:9,color:"var(--t3)"}}>{j?`${j.length} chars`:"—"}</span>
+      </div>
+    </div>}
+    {t==="ig"&&<div>
+      <textarea className="fta" style={{minHeight:140,fontFamily:"var(--f-mono)",fontSize:9}} value={gedIn} onChange={e=>{setGedIn(e.target.value);setPreview(null)}} placeholder="Paste GEDCOM atau pilih file .ged ..."/>
+      <div style={{display:"flex",gap:6,marginTop:6,alignItems:"center",flexWrap:"wrap"}}>
+        <label className="btn btn-sm" style={{cursor:"pointer"}}><input type="file" accept=".ged,.gedcom" hidden onChange={e=>{const f=e.target.files[0];if(f)f.text().then(t=>{setGedIn(t);setPreview(null)})}}/> Pilih File .ged</label>
+        <button className="btn btn-sm" onClick={()=>{try{const m=GEDCOM.fromGedcom(gedIn);setPreview(m)}catch(e){alert("Error parsing GEDCOM: "+e.message)}}} disabled={!gedIn.trim()}>Preview</button>
+        {preview&&<button className="btn btn-p btn-sm" onClick={()=>{onImport(preview);onClose()}}>Import {preview.length} anggota</button>}
+      </div>
+      {preview&&<div style={{marginTop:8,padding:"8px 10px",background:"var(--bg2)",borderRadius:6,fontSize:10,maxHeight:120,overflow:"auto"}}>
+        <div style={{fontWeight:600,marginBottom:4,color:"var(--pri)"}}>{preview.length} anggota terdeteksi:</div>
+        {preview.map((m,i)=><div key={i} style={{color:"var(--t2)",lineHeight:1.6}}>{m.gender==="male"?"♂":"♀"} {m.name}{m.birthDate?` · ${m.birthDate}`:""}{m.parentId?" · (ada parent)":""}{m.spouseId?" · (ada spouse)":""}</div>)}
+      </div>}
+      <div style={{marginTop:8,fontSize:9,color:"var(--t3)",lineHeight:1.6}}>GEDCOM 5.5.1 dari: Gramps, MyHeritage, Ancestry, FamilySearch, dll. Data yang di-import: nama, gender, tanggal lahir/wafat, tempat lahir, catatan, hubungan keluarga.</div>
+    </div>}
+  </div></div></div>}
 
 // ═══════════════════════════════════════════════════════════════
 // APP ROOT
