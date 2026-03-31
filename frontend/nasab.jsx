@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 // ═══════════════════════════════════════════════════════════════════════
 // NASAB — Jaga Nasabmu
@@ -167,7 +167,7 @@ const SEED=(()=>{const I={a:"p_s1",b:"p_s2",c:"p_s3",d:"p_s4",e:"p_s5",f:"p_s6",
 // ─── STYLES ──────────────────────────────────────────────────
 const css=`
 /* Fonts & Leaflet CSS loaded via preload in index.html */
-:root{
+:root,[data-theme="dark"]{
   --bg0:#07090e;--bg1:#0c1017;--bg2:#131821;--bg3:#1a2030;--bg4:#222a3a;
   --bdr:#1e2738;--bdr2:#2c3a50;
   --t1:#e4e8f0;--t2:#7d8ba0;--t3:#4d5a70;
@@ -177,6 +177,15 @@ const css=`
   --fem-bg:#1e0f28;--fem-bdr:#3a1850;--fem-t:#d946ef;
   --r:8px;--rs:6px;
   --f-display:'Instrument Serif',serif;--f-body:'DM Sans',sans-serif;--f-mono:'JetBrains Mono',monospace;
+}
+[data-theme="light"]{
+  --bg0:#f4f6f9;--bg1:#ffffff;--bg2:#f0f2f5;--bg3:#e4e7ec;--bg4:#d1d5dc;
+  --bdr:#d8dce3;--bdr2:#c0c6d0;
+  --t1:#1a1d23;--t2:#4a5060;--t3:#8590a0;
+  --pri:#0d9488;--pri2:#0f766e;--pri3:#14b8a6;
+  --acc:#4f46e5;--warn:#d97706;--rose:#db2777;--purple:#7c3aed;--orange:#ea580c;
+  --male-bg:#e8f4fd;--male-bdr:#b8d8f0;--male-t:#0369a1;
+  --fem-bg:#fce8f4;--fem-bdr:#f0b8d8;--fem-t:#be185d;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-height:100vh;min-height:100dvh;overflow:hidden;-webkit-tap-highlight-color:transparent}
@@ -378,6 +387,20 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 .role-super_admin{background:#7c3aed22;color:#a78bfa}
 .role-admin{background:#6366f122;color:#818cf8}
 .role-user{background:var(--bg3);color:var(--t2)}
+/* Theme toggle */
+.theme-btn{width:32px;height:32px;border-radius:var(--rs);border:1px solid var(--bdr);background:var(--bg2);color:var(--t2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0;padding:0}
+.theme-btn:hover{background:var(--bg3);border-color:var(--bdr2);transform:translateY(-1px)}
+[data-theme="light"] .auth-hero{background:linear-gradient(160deg,#eef2f7 0%,#e4eaf2 50%,#dce4ef 100%)}
+[data-theme="light"] .auth-hero::before{background:radial-gradient(circle,rgba(13,148,136,.06) 0%,transparent 70%)}
+[data-theme="light"] .auth-hero::after{background:radial-gradient(circle,rgba(79,70,229,.04) 0%,transparent 70%)}
+[data-theme="light"] .cc{box-shadow:0 1px 4px rgba(0,0,0,.08)}
+[data-theme="light"] .cc:hover{box-shadow:0 4px 16px rgba(0,0,0,.12)}
+[data-theme="light"] .fam-card{box-shadow:0 1px 4px rgba(0,0,0,.06)}
+[data-theme="light"] .fam-card:hover{box-shadow:0 6px 20px rgba(0,0,0,.1)}
+[data-theme="light"] .modal{box-shadow:0 16px 48px rgba(0,0,0,.15)}
+[data-theme="light"] .toast{box-shadow:0 4px 16px rgba(0,0,0,.12)}
+[data-theme="light"] .map-popup-mt{color:#555}
+[data-theme="light"] .leaflet-popup-content-wrapper{background:#fff!important;color:#1a1d23!important}
 /* Dev Footer */
 .dev-footer{padding:16px 20px;border-top:1px solid var(--bdr);text-align:center;font-size:10px;color:var(--t3);line-height:1.8;flex-shrink:0}
 .dev-footer a{color:var(--pri);text-decoration:none}.dev-footer a:hover{text-decoration:underline}
@@ -669,6 +692,7 @@ function AuthScreen({onLogin}){
             <div className="auth-trust-item">🔒 <b>Enkripsi</b></div>
             <div className="auth-trust-item">☁️ <b>Cloud Sync</b></div>
             <div className="auth-trust-item">🇮🇩 <b>Indonesia-first</b></div>
+            <ThemeBtn/>
           </div>
           <DevFooter/>
         </div>
@@ -687,7 +711,7 @@ function AdminPanel({user,onBack,onSelectFamily}){
   const changeRole=async(uid,role)=>{try{await API.setUserRole(uid,role);load()}catch(e){alert(e.message)}};
   const delUser=async uid=>{if(!confirm("Hapus user ini?"))return;try{await API.deleteUser(uid);load()}catch(e){alert(e.message)}};
   const isSA=user.role==="super_admin";
-  return(<div className="dash"><header className="dash-hdr"><h1>NAS<em>AB</em></h1><div className="dash-user"><span className="admin-badge">{user.role==="super_admin"?"SUPER ADMIN":"ADMIN"}</span><b>{user.name}</b><button className="btn btn-sm btn-ghost" onClick={onBack}><Ic.Back/> Dashboard</button></div></header>
+  return(<div className="dash"><header className="dash-hdr"><h1>NAS<em>AB</em></h1><div className="dash-user"><span className="admin-badge">{user.role==="super_admin"?"SUPER ADMIN":"ADMIN"}</span><b>{user.name}</b><ThemeBtn/><button className="btn btn-sm btn-ghost" onClick={onBack}><Ic.Back/> Dashboard</button></div></header>
     <div className="admin-panel"><div className="admin-tabs">{[{id:"stats",l:"Statistik"},{id:"users",l:"Users"},{id:"families",l:"Families"}].map(t=><button key={t.id} className={`admin-tab ${tab===t.id?"on":""}`} onClick={()=>setTab(t.id)}>{t.l}</button>)}</div>
     {loading?<div style={{textAlign:"center",padding:40,color:"var(--t3)"}}>Loading...</div>:
     tab==="stats"&&stats?<div className="admin-stats">{[{l:"Total Users",v:stats.totalUsers,c:"var(--acc)"},{l:"Total Families",v:stats.totalFamilies,c:"var(--pri)"},{l:"Total Members",v:stats.totalMembers,c:"var(--warn)"},{l:"Total Stories",v:stats.totalStories,c:"var(--orange)"}].map((s,i)=><div key={i} className="admin-stat"><h4>{s.l}</h4><div className="admin-val" style={{color:s.c}}>{s.v}</div></div>)}</div>:
@@ -708,7 +732,7 @@ function Dashboard({user,onSelectFamily,onLogout,onCreateFamily,onAdmin}){
   const hoverFam=f=>{if(!prefetch.current[f.id])prefetch.current[f.id]=API.getFamily(f.id)};
   const rc={[RL.OWNER]:{bg:"var(--pri)",c:"#000"},[RL.EDITOR]:{bg:"var(--acc)",c:"#fff"},[RL.VIEWER]:{bg:"var(--bg3)",c:"var(--t2)"}};
   return(<div className="dash">
-    <header className="dash-hdr"><h1>NAS<em>AB</em></h1><div className="dash-user">{(user.role==="admin"||user.role==="super_admin")&&<button className="btn btn-sm" onClick={onAdmin} style={{background:"var(--acc)",color:"#fff",fontSize:10,padding:"4px 10px"}}>Admin Panel</button>}<span style={{color:"var(--t3)",fontSize:11}}>Halo,</span><b>{user.name}</b><div className="dash-av">{ini(user.name)}</div><button className="btn btn-sm btn-ghost" onClick={onLogout}>Keluar</button></div></header>
+    <header className="dash-hdr"><h1>NAS<em>AB</em></h1><div className="dash-user">{(user.role==="admin"||user.role==="super_admin")&&<button className="btn btn-sm" onClick={onAdmin} style={{background:"var(--acc)",color:"#fff",fontSize:10,padding:"4px 10px"}}>Admin Panel</button>}<span style={{color:"var(--t3)",fontSize:11}}>Halo,</span><b>{user.name}</b><div className="dash-av">{ini(user.name)}</div><ThemeBtn/><button className="btn btn-sm btn-ghost" onClick={onLogout}>Keluar</button></div></header>
     <div className="dash-body"><div style={{maxWidth:960,margin:"0 auto"}}>
       <div style={{marginBottom:20}}><h2 style={{fontFamily:"var(--f-display)",fontSize:22}}>Silsilah Saya</h2><p style={{fontSize:12,color:"var(--t3)",marginTop:2}}>Kelola pohon keluarga, undang anggota untuk berkolaborasi</p></div>
       <div className="dash-grid">
@@ -751,6 +775,7 @@ function Workspace({family:initFam,user,onBack}){
       <div className="ws-actions">
         <div className="sbox"><Ic.Search/><input placeholder="Cari..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
         <button className="btn btn-sm" onClick={()=>setShowShare(true)}><Ic.Share/></button>
+        <ThemeBtn/>
         <button className="btn btn-sm" onClick={()=>setShowFar(true)} title="Kalkulator Faraidh" style={{fontSize:11}}>⚖️</button>
         <button className="btn btn-sm" onClick={()=>setShowIE(true)}><Ic.DL/></button>
         {!pp.length&&<button className="btn btn-sm" onClick={loadDemo}>Demo</button>}
@@ -918,11 +943,17 @@ function IEModal({pp,onImport,onClose}){const[j,setJ]=useState("");const[t,setT]
 // ═══════════════════════════════════════════════════════════════
 // APP ROOT
 // ═══════════════════════════════════════════════════════════════
+const ThemeCtx=React.createContext({theme:"dark",toggle:()=>{}});
+function useTheme(){return React.useContext(ThemeCtx)}
+function ThemeBtn(){const{theme,toggle}=useTheme();return<button className="theme-btn" onClick={toggle} title={theme==="dark"?"Light mode":"Dark mode"}>{theme==="dark"?"☀️":"🌙"}</button>}
 export default function App(){
   const[user,setUser]=useState(null);const[af,setAf]=useState(null);const[adminView,setAdminView]=useState(false);const[loading,setLoading]=useState(true);
+  const[theme,setTheme]=useState(()=>localStorage.getItem("nasab-theme")||"dark");
+  useEffect(()=>{document.documentElement.setAttribute("data-theme",theme);localStorage.setItem("nasab-theme",theme);document.querySelector('meta[name="theme-color"]')?.setAttribute("content",theme==="dark"?"#07090e":"#f4f6f9")},[theme]);
+  const toggle=useCallback(()=>setTheme(t=>t==="dark"?"light":"dark"),[]);
   useEffect(()=>{(async()=>{if(API.hasSession()){try{const u=await API.me();setUser(u)}catch{API.clearSession()}}setLoading(false)})()},[]);
   const login=async u=>{setUser(u)};
   const logout=async()=>{setUser(null);setAf(null);setAdminView(false);API.clearSession()};
   if(loading)return<div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg0)",fontFamily:"var(--f-display)",fontSize:20,color:"var(--t3)"}}>Loading...</div>;
-  return<><style>{css}</style>{!user?<AuthScreen onLogin={login}/>:af?<Workspace family={af} user={user} onBack={()=>setAf(null)}/>:adminView?<AdminPanel user={user} onBack={()=>setAdminView(false)} onSelectFamily={f=>setAf(f)}/>:<Dashboard user={user} onLogout={logout} onSelectFamily={f=>setAf(f)} onCreateFamily={(u,f)=>{setUser(u);setAf(f)}} onAdmin={()=>setAdminView(true)}/>}</>;
+  return<ThemeCtx.Provider value={{theme,toggle}}><style>{css}</style>{!user?<AuthScreen onLogin={login}/>:af?<Workspace family={af} user={user} onBack={()=>setAf(null)}/>:adminView?<AdminPanel user={user} onBack={()=>setAdminView(false)} onSelectFamily={f=>setAf(f)}/>:<Dashboard user={user} onLogout={logout} onSelectFamily={f=>setAf(f)} onCreateFamily={(u,f)=>{setUser(u);setAf(f)}} onAdmin={()=>setAdminView(true)}/>}</ThemeCtx.Provider>;
 }
