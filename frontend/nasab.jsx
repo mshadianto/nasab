@@ -861,7 +861,7 @@ function Workspace({family:initFam,user,onBack}){
     <div style={{flex:1,position:"relative",overflow:"hidden"}}>
       {vw===VW.CANVAS&&<CanvasView pp={viewPP} marriages={mrs} onSel={setSel} selId={sel?.id} onPos={updPos} savedPos={pos}/>}
       {vw===VW.MAP&&<MapView pp={viewPP} onSel={setSel}/>}
-      {vw===VW.LIST&&<div style={{height:"100%",overflow:"auto"}}><div style={{maxWidth:800,margin:"0 auto",padding:"16px 16px 0"}}><FilterBar pp={pp} filters={filters} setFilters={setFilters}/></div><ListView pp={Object.keys(filters).length?FE.filter(viewPP,filters):viewPP} allPP={pp} onSel={setSel}/></div>}
+      {vw===VW.LIST&&<div style={{height:"100%",overflow:"auto"}}><div style={{maxWidth:800,margin:"0 auto",padding:"16px 16px 0"}}><FilterBar pp={pp} filters={filters} setFilters={setFilters}/></div><ListView pp={Object.keys(filters).length?FE.filter(viewPP,filters):viewPP} allPP={pp} onSel={setSel} canEdit={canEdit} fam={fam} onDone={reloadFam} flash={flash}/></div>}
       {vw===VW.STATS&&<div style={{height:"100%",overflow:"auto"}}><StatsView pp={viewPP}/></div>}
       {vw===VW.TIMELINE&&<div style={{height:"100%",overflow:"auto"}}><TimelineView pp={viewPP} onSel={setSel}/></div>}
       {vw===VW.INSIGHTS&&<InsightsView pp={pp} fam={fam} canEdit={canEdit} onSaveFam={reloadFam} flash={flash}/>}
@@ -869,7 +869,7 @@ function Workspace({family:initFam,user,onBack}){
     </div>
     {showForm&&canEdit&&<PersonForm person={editP} pp={pp} onSave={handleSave} onClose={()=>{setShowForm(false);setEditP(null)}}/>}
     {showShare&&<ShareModal fam={fam} user={user} onClose={()=>setShowShare(false)} onUpd={reloadFam} flash={flash}/>}
-    {showIE&&<IEModal pp={pp} onImport={async d=>{try{for(const m of d){await API.addMember(fam.id,m)}await reloadFam();flash("Data diimport")}catch(e){flash(e.message)}}} onClose={()=>setShowIE(false)}/>}
+    {showIE&&<IEModal pp={pp} fam={fam} onDone={reloadFam} onClose={()=>setShowIE(false)} flash={flash}/>}
     {showFar&&<FaraidhCalc pp={pp} onClose={()=>setShowFar(false)}/>}
     {showMar&&<MarriageModal pp={pp} marriages={mrs} fam={fam} onClose={()=>setShowMar(false)} onSave={reloadFam} flash={flash}/>}
     {showKK&&<KKModal fam={fam} onClose={()=>setShowKK(false)} onDone={reloadFam} flash={flash}/>}
@@ -1036,7 +1036,25 @@ function Sidebar({p,pp,marriages=[],canEdit,onClose,onEdit,onDel,onSel}){const p
   return(<div className="sb" onClick={e=>e.stopPropagation()}><div className="sb-h"><h3>Detail</h3><button className="btn btn-icon btn-ghost" onClick={onClose}><Ic.X/></button></div><div className="sb-b"><div className={`sb-av ${p.gender}`}>{ini(p.name)}</div><div className="sb-nm">{p.name}</div><div className="sb-sub">{p.gender==="male"?"♂":"♀"} · {gl.l}{p.deathDate?" · Alm.":""} · {(p.agama||"islam").charAt(0).toUpperCase()+(p.agama||"islam").slice(1)}</div>{ctx&&<div className="sb-ctx">{ctx}</div>}<div className="sb-sec"><div className="sb-sec-t">Info</div>{p.nik&&<div className="sb-row"><span className="sb-row-l">🆔 NIK</span><span className="sb-row-v"><span className="nik-masked" onClick={()=>setShowNik(!showNik)} style={{cursor:"pointer"}} title="Klik untuk tampilkan/sembunyikan">{showNik?NIK.format(p.nik):NIK.mask(p.nik)}</span></span></div>}{p.birthDate&&<div className="sb-row"><span className="sb-row-l">Lahir</span><span className="sb-row-v">{new Date(p.birthDate).toLocaleDateString("id-ID",{year:"numeric",month:"long",day:"numeric"})}</span></div>}{age!==null&&<div className="sb-row"><span className="sb-row-l">Usia</span><span className="sb-row-v">{age} th</span></div>}{p.location?.lat&&<div className="sb-row"><span className="sb-row-l">📍</span><span className="sb-row-v">{p.location.address||`${p.location.lat.toFixed(3)},${p.location.lng.toFixed(3)}`}</span></div>}<div className="sb-row"><span className="sb-row-l">Keturunan</span><span className="sb-row-v">{d}</span></div>{p.notes&&<div className="sb-row"><span className="sb-row-l">Catatan</span><span className="sb-row-v">{p.notes}</span></div>}</div>
     <div className="sb-sec"><div className="sb-sec-t">Hubungan</div>{pa&&<div className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(pa),50)}}><span className="sb-rel-t">PARENT</span>{pa.name}</div>}{sps.map((s,i)=>{const mar=marriages.find(m=>(m.husbandId===p.id&&m.wifeId===s.id)||(m.husbandId===s.id&&m.wifeId===p.id));return<div key={s.id} className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(s),50)}}><span className="sb-rel-t" style={{color:"var(--rose)"}}>{sps.length>1?`ISTRI ${mar?.order||i+1}`:"SPOUSE"}</span>{s.name}</div>})}{sib.map(s=><div key={s.id} className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(s),50)}}><span className="sb-rel-t" style={{color:"var(--purple)"}}>SIBLING</span>{s.name}</div>)}{ch.map(c=><div key={c.id} className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(c),50)}}><span className="sb-rel-t" style={{color:"var(--pri)"}}>CHILD</span>{c.name}</div>)}</div></div>
     {canEdit&&<div className="sb-ft"><button className="btn btn-d btn-sm" onClick={()=>onDel(p.id)}><Ic.Trash/></button><button className="btn btn-p btn-sm" onClick={()=>onEdit(p)}><Ic.Edit/> Edit</button></div>}</div>)}
-function ListView({pp,allPP,onSel}){const people=allPP||pp;return(<div className="lv">{[...pp].sort((a,b)=>FE.gen(people,a.id)-FE.gen(people,b.id)||a.name.localeCompare(b.name)).map(p=>{const g=FE.gen(people,p.id);const gl=GL[g]||{l:`Gen ${g+1}`};const c=GC[g%GC.length];return<div key={p.id} className="li" onClick={()=>onSel(p)}><div className={`li-av ${p.gender}`}>{ini(p.name)}</div><div className="li-info"><h4>{p.name}</h4><p>{p.location?.address||p.notes||"—"}</p></div><span className="li-badge" style={{background:c+"18",color:c,border:`1px solid ${c}30`}}>{gl.l}</span></div>})}</div>)}
+function ListView({pp,allPP,onSel,canEdit,fam,onDone,flash}){const people=allPP||pp;
+  const[selMode,setSelMode]=useState(false);const[selected,setSelected]=useState(new Set());const[deleting,setDeleting]=useState(false);
+  const toggle=id=>{setSelected(prev=>{const n=new Set(prev);if(n.has(id))n.delete(id);else n.add(id);return n})};
+  const selAll=()=>{if(selected.size===pp.length)setSelected(new Set());else setSelected(new Set(pp.map(p=>p.id)))};
+  const bulkDel=async()=>{if(!selected.size||!confirm(`Hapus ${selected.size} orang? Tidak bisa dibatalkan.`))return;setDeleting(true);let ok=0,skip=0;
+    for(const id of selected){const ch=FE.ch(pp,id);if(ch.length){skip++;continue}try{await API.deleteMember(fam.id,id);ok++}catch{skip++}}
+    setDeleting(false);setSelected(new Set());setSelMode(false);if(onDone)onDone();flash(`${ok} dihapus${skip?`, ${skip} dilewati (punya anak)`:""}`);};
+  const sorted=[...pp].sort((a,b)=>FE.gen(people,a.id)-FE.gen(people,b.id)||a.name.localeCompare(b.name));
+  return(<div className="lv">
+    {canEdit&&<div style={{display:"flex",gap:6,alignItems:"center",padding:"6px 0",marginBottom:4,flexWrap:"wrap"}}>
+      <button className="btn btn-sm" onClick={()=>{setSelMode(!selMode);setSelected(new Set())}}>{selMode?"Batal":"Pilih"}</button>
+      {selMode&&<><button className="btn btn-sm" onClick={selAll}>{selected.size===pp.length?"Batal Semua":"Pilih Semua"}</button>
+      <button className="btn btn-sm btn-d" onClick={bulkDel} disabled={!selected.size||deleting}>{deleting?"Menghapus...":selected.size?`Hapus ${selected.size} Terpilih`:"Hapus"}</button>
+      <span style={{fontSize:10,color:"var(--t3)"}}>{selected.size} dipilih</span></>}
+    </div>}
+    {sorted.map(p=>{const g=FE.gen(people,p.id);const gl=GL[g]||{l:`Gen ${g+1}`};const c=GC[g%GC.length];return<div key={p.id} className="li" onClick={()=>selMode?toggle(p.id):onSel(p)} style={selMode&&selected.has(p.id)?{borderColor:"var(--pri)",background:"rgba(20,184,166,.06)"}:undefined}>
+      {selMode&&<input type="checkbox" checked={selected.has(p.id)} onChange={()=>toggle(p.id)} style={{accentColor:"var(--pri)",flexShrink:0}} onClick={e=>e.stopPropagation()}/>}
+      <div className={`li-av ${p.gender}`}>{ini(p.name)}</div><div className="li-info"><h4>{p.name}</h4><p>{p.location?.address||p.notes||"—"}</p></div><span className="li-badge" style={{background:c+"18",color:c,border:`1px solid ${c}30`}}>{gl.l}</span></div>})}
+  </div>)}
 function StatsView({pp}){const s=useMemo(()=>FE.stats(pp),[pp]);return<div className="sg">{[{l:"Total",v:s.total,c:"var(--pri)"},{l:"Laki-laki",v:s.males,c:"var(--male-t)"},{l:"Perempuan",v:s.females,c:"var(--fem-t)"},{l:"Hidup",v:s.living,c:"var(--pri)"},{l:"Almarhum",v:s.deceased,c:"var(--t3)"},{l:"Generasi",v:s.generations,c:"var(--warn)"},{l:"Geotagged",v:s.geotagged,c:"var(--orange)"},{l:"Avg Anak",v:s.avgChildren,c:"var(--purple)"}].map((c,i)=><div key={i} className="sc"><div className="sc-v" style={{color:c.c}}>{c.v}</div><div className="sc-l">{c.l}</div></div>)}</div>}
 function TimelineView({pp,onSel}){const ev=useMemo(()=>{const e=[];pp.forEach(p=>{if(p.birthDate)e.push({d:p.birthDate,t:"b",p,l:`Lahir: ${p.name}`});if(p.deathDate)e.push({d:p.deathDate,t:"d",p,l:`Wafat: ${p.name}`})});return e.sort((a,b)=>a.d.localeCompare(b.d))},[pp]);if(!ev.length)return<div className="empty"><h3>Belum ada peristiwa</h3></div>;return<div className="tl">{ev.map((e,i)=><div key={i} className="tl-i" onClick={()=>onSel(e.p)}><div className="tl-dot" style={{background:e.t==="b"?"var(--pri)":"var(--t3)"}}/><div className="tl-yr">{new Date(e.d).toLocaleDateString("id-ID",{year:"numeric",month:"long",day:"numeric"})}</div><div className="tl-tt">{e.l}</div></div>)}</div>}
 function FaraidhResultTable({results,total,fmt,label}){
@@ -1255,7 +1273,7 @@ const GEDCOM={
   },
   _fmtDate(d){if(!d)return"";const p=d.split("-");if(p.length!==3)return d;const mo=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];return`${parseInt(p[2])} ${mo[parseInt(p[1])-1]||"JAN"} ${p[0]}`},
   _parseDate(d){if(!d)return"";const m=d.match(/(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{4})/i);if(!m)return"";const mo={JAN:"01",FEB:"02",MAR:"03",APR:"04",MAY:"05",JUN:"06",JUL:"07",AUG:"08",SEP:"09",OCT:"10",NOV:"11",DEC:"12"};return`${m[3]}-${mo[m[2].toUpperCase()]||"01"}-${m[1].padStart(2,"0")}`},
-  // Parse GEDCOM text into member array
+  // Parse GEDCOM text → {individuals, families} with GEDCOM IDs preserved
   fromGedcom(text){
     const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
     const indis={},famr={};let cur=null,ctx=null,sub=null;
@@ -1263,13 +1281,13 @@ const GEDCOM={
       const lm=l.match(/^(\d+)\s+(.+)/);if(!lm)return;
       const lv=parseInt(lm[1]),rest=lm[2];
       if(lv===0){
-        const im=rest.match(/@(I[^@]+)@\s+INDI/);if(im){cur={_id:im[1],name:"",gender:"male",birthDate:"",deathDate:"",birthPlace:"",notes:"",nik:"",agama:"islam",location:null};indis[im[1]]=cur;ctx="INDI";sub=null;return}
-        const fm=rest.match(/@(F[^@]+)@\s+FAM/);if(fm){cur={_id:fm[1],husb:null,wife:null,children:[]};famr[fm[1]]=cur;ctx="FAM";sub=null;return}
+        const im=rest.match(/@([^@]+)@\s+INDI/);if(im){cur={_gid:im[1],name:"",gender:"male",birthDate:"",deathDate:"",birthPlace:"",notes:"",nik:"",agama:"islam",_lat:null,_lng:null};indis[im[1]]=cur;ctx="INDI";sub=null;return}
+        const fm=rest.match(/@([^@]+)@\s+FAM/);if(fm){cur={_gid:fm[1],husb:null,wife:null,children:[]};famr[fm[1]]=cur;ctx="FAM";sub=null;return}
         ctx=null;return;
       }
       if(ctx==="INDI"&&cur){
         if(lv===1){sub=null;const tm=rest.match(/^(\S+)\s*(.*)/);if(!tm)return;const[,tag,val]=tm;
-          if(tag==="NAME"){const nm=val.replace(/\//g,"").trim();cur.name=nm}
+          if(tag==="NAME"){const nm=val.replace(/\//g,"").replace(/\s+/g," ").trim();cur.name=nm}
           if(tag==="SEX")cur.gender=val.trim()==="F"?"female":"male";
           if(tag==="BIRT")sub="BIRT";if(tag==="DEAT")sub="DEAT";
           if(tag==="NOTE")cur.notes=(cur.notes?cur.notes+" ":"")+val;
@@ -1281,7 +1299,6 @@ const GEDCOM={
           if(sub==="BIRT"&&tag==="DATE")cur.birthDate=GEDCOM._parseDate(val);
           if(sub==="BIRT"&&tag==="PLAC")cur.birthPlace=val;
           if(sub==="DEAT"&&tag==="DATE")cur.deathDate=GEDCOM._parseDate(val);
-          if(tag==="GIVN"||tag==="SURN"){}// name already parsed from NAME
         }
       }
       if(ctx==="FAM"&&cur){
@@ -1290,32 +1307,65 @@ const GEDCOM={
         }
       }
     });
-    // Build member array with relationships
-    const members=[];const idMap={};
-    Object.values(indis).forEach(p=>{
-      const id=`p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`;
-      idMap[p._id]=id;
-      const m={id,name:p.name,gender:p.gender,birthDate:p.birthDate,deathDate:p.deathDate,birthPlace:p.birthPlace,notes:p.notes,nik:p.nik,agama:p.agama,parentId:null,spouseId:null,location:p._lat?{lat:p._lat,lng:p._lng,address:p.birthPlace||""}:null,photo:"",createdAt:new Date().toISOString()};
-      members.push(m);
-    });
-    // Set relationships from FAM records
-    Object.values(famr).forEach(f=>{
-      const hid=idMap[f.husb],wid=idMap[f.wife];
-      if(hid&&wid){const h=members.find(m=>m.id===hid),w=members.find(m=>m.id===wid);if(h&&w){h.spouseId=wid;w.spouseId=hid}}
-      f.children.forEach(cRef=>{const cid=idMap[cRef];if(!cid)return;const child=members.find(m=>m.id===cid);
-        if(child){if(hid&&members.find(m=>m.id===hid))child.parentId=hid;else if(wid)child.parentId=wid}
-      });
-    });
-    return members;
+    return{indis:Object.values(indis),families:Object.values(famr),stats:{indiCount:Object.keys(indis).length,famCount:Object.keys(famr).length}};
+  },
+  // Import parsed GEDCOM to API sequentially with progress callback
+  async importToAPI(parsed,famId,existingPP=[],onProgress){
+    const{indis,families}=parsed;
+    const gidToServerId={};// GEDCOM _gid → server-assigned ID
+    let done=0,failed=0,skipped=0;const total=indis.length;
+    const dupSet=new Set(existingPP.map(p=>(p.name||"").toLowerCase().trim()+"_"+(p.birthDate||"")));
+    // Phase 1: Create all individuals (no relationships yet)
+    for(const p of indis){
+      const dupKey=(p.name||"").toLowerCase().trim()+"_"+(p.birthDate||"");
+      if(dupSet.has(dupKey)){skipped++;gidToServerId[p._gid]=null;done++;if(onProgress)onProgress({done,total,phase:"Menyimpan anggota",detail:`Skip duplikat: ${p.name}`});continue}
+      try{
+        const res=await API.addMember(famId,{name:p.name,gender:p.gender,birthDate:p.birthDate||"",deathDate:p.deathDate||"",birthPlace:p.birthPlace||"",notes:p.notes||"",parentId:null,spouseId:null,location:p._lat?{lat:p._lat,lng:p._lng,address:p.birthPlace||""}:null,nik:p.nik||"",agama:p.agama||"islam",noKk:""});
+        gidToServerId[p._gid]=res.id;done++;
+        if(onProgress)onProgress({done,total,phase:"Menyimpan anggota",detail:p.name});
+      }catch(e){failed++;done++;gidToServerId[p._gid]=null;if(onProgress)onProgress({done,total,phase:"Menyimpan anggota",detail:`Gagal: ${p.name}`})}
+      await new Promise(r=>setTimeout(r,50));// throttle
+    }
+    // Phase 2: Apply relationships from FAM records
+    let relDone=0;const relTotal=families.length;
+    for(const f of families){
+      const hid=gidToServerId[f.husb],wid=gidToServerId[f.wife];
+      // Spouse link
+      if(hid&&wid){
+        try{await API.addMarriage(famId,{husband_id:hid,wife_id:wid,marriage_order:1})}catch{}
+      }
+      // Children → parentId = husb (or wife if no husb)
+      const pid=hid||wid;
+      if(pid){for(const cgid of f.children){const cid=gidToServerId[cgid];if(!cid)continue;
+        // Fetch current member data to update parentId
+        try{const fam=await API.getFamily(famId);const child=fam.members.find(m=>m.id===cid);
+          if(child)await API.updateMember(famId,cid,{...child,parentId:pid})}catch{}}}
+      relDone++;if(onProgress)onProgress({done:total,total,phase:"Menghubungkan keluarga",detail:`FAM ${relDone}/${relTotal}`});
+      await new Promise(r=>setTimeout(r,50));
+    }
+    return{imported:done-failed-skipped,failed,skipped,families:families.length};
   }
 };
 
-function IEModal({pp,onImport,onClose}){const[j,setJ]=useState("");const[t,setT]=useState("ej");const[gedIn,setGedIn]=useState("");const[preview,setPreview]=useState(null);
+function IEModal({pp,fam,onDone,onClose,flash}){const[j,setJ]=useState("");const[t,setT]=useState("ej");const[gedIn,setGedIn]=useState("");
+  const[gedParsed,setGedParsed]=useState(null);const[importing,setImporting]=useState(false);const[progress,setProgress]=useState(null);const[result,setResult]=useState(null);
   const dlFile=(content,name,type)=>{const b=new Blob([content],{type});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=name;a.click();URL.revokeObjectURL(u)};
-  return<div className="modal-ov" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:560}}><div className="m-hdr"><h2>Import / Export</h2><button className="btn btn-icon btn-ghost" onClick={onClose}><Ic.X/></button></div><div className="m-body">
+  const parseGed=()=>{try{const p=GEDCOM.fromGedcom(gedIn);setGedParsed(p);setResult(null)}catch(e){flash("Error parsing: "+e.message)}};
+  const doGedImport=async()=>{if(!gedParsed||importing)return;setImporting(true);setResult(null);
+    try{const r=await GEDCOM.importToAPI(gedParsed,fam.id,pp,p=>setProgress(p));setResult(r);onDone();flash(`${r.imported} anggota + ${r.families} keluarga diimport`)}catch(e){flash("Import gagal: "+e.message)}setImporting(false)};
+  const doJsonImport=async()=>{try{const d=JSON.parse(j);if(!Array.isArray(d))return;setImporting(true);let ok=0,fail=0;
+    for(let i=0;i<d.length;i++){try{await API.addMember(fam.id,d[i]);ok++}catch{fail++}setProgress({done:i+1,total:d.length,phase:"Import JSON",detail:`${ok} ok, ${fail} gagal`})}
+    setImporting(false);onDone();flash(`${ok} diimport, ${fail} gagal`);onClose()}catch{flash("Invalid JSON")}};
+  return<div className="modal-ov" onClick={importing?undefined:onClose}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:600}}><div className="m-hdr"><h2>Import / Export</h2>{!importing&&<button className="btn btn-icon btn-ghost" onClick={onClose}><Ic.X/></button>}</div><div className="m-body">
+    {importing?<div style={{textAlign:"center",padding:20}}>
+      <div style={{fontSize:14,fontWeight:600,color:"var(--pri)",marginBottom:10}}>{progress?.phase||"Memproses..."}</div>
+      <div style={{background:"var(--bg3)",borderRadius:8,height:8,marginBottom:8,overflow:"hidden"}}><div style={{height:"100%",background:"var(--pri)",borderRadius:8,transition:"width .2s",width:`${progress?(progress.done/progress.total*100):0}%`}}/></div>
+      <div style={{fontSize:11,color:"var(--t2)",fontFamily:"var(--f-mono)"}}>{progress?`${progress.done} / ${progress.total}`:""}</div>
+      <div style={{fontSize:10,color:"var(--t3)",marginTop:4}}>{progress?.detail||""}</div>
+    </div>:<>
     <div style={{display:"flex",gap:4,marginBottom:12,flexWrap:"wrap"}}>
       {[{id:"ej",l:"Export JSON"},{id:"eg",l:"Export GEDCOM"},{id:"ij",l:"Import JSON"},{id:"ig",l:"Import GEDCOM"}].map(x=>
-        <button key={x.id} className={`btn btn-sm ${t===x.id?"btn-p":""}`} onClick={()=>{setT(x.id);setPreview(null)}}>{x.l}</button>)}
+        <button key={x.id} className={`btn btn-sm ${t===x.id?"btn-p":""}`} onClick={()=>{setT(x.id);setGedParsed(null);setResult(null)}}>{x.l}</button>)}
     </div>
     {t==="ej"&&<div>
       <textarea className="fta" style={{minHeight:140,fontFamily:"var(--f-mono)",fontSize:9}} readOnly value={JSON.stringify(pp,null,2)}/>
@@ -1325,30 +1375,31 @@ function IEModal({pp,onImport,onClose}){const[j,setJ]=useState("");const[t,setT]
       <textarea className="fta" style={{minHeight:140,fontFamily:"var(--f-mono)",fontSize:9}} readOnly value={GEDCOM.toGedcom(pp)}/>
       <div style={{display:"flex",gap:6,marginTop:6}}>
         <button className="btn btn-p btn-sm" onClick={()=>dlFile(GEDCOM.toGedcom(pp),`nasab-export-${Date.now()}.ged`,"text/plain")}>Download .ged</button>
-        <span style={{fontSize:9,color:"var(--t3)",alignSelf:"center"}}>GEDCOM 5.5.1 — kompatibel dengan Gramps, MyHeritage, Ancestry, dll.</span>
+        <span style={{fontSize:9,color:"var(--t3)",alignSelf:"center"}}>GEDCOM 5.5.1</span>
       </div>
     </div>}
     {t==="ij"&&<div>
       <textarea className="fta" style={{minHeight:140,fontFamily:"var(--f-mono)",fontSize:9}} value={j} onChange={e=>setJ(e.target.value)} placeholder="Paste JSON array..."/>
       <div style={{display:"flex",gap:6,marginTop:6,alignItems:"center"}}>
         <label className="btn btn-sm" style={{cursor:"pointer"}}><input type="file" accept=".json" hidden onChange={e=>{const f=e.target.files[0];if(f)f.text().then(t=>setJ(t))}}/> Pilih File</label>
-        <button className="btn btn-p btn-sm" onClick={()=>{try{const d=JSON.parse(j);if(Array.isArray(d)){onImport(d);onClose()}}catch{alert("Invalid JSON")}}}>Import</button>
-        <span style={{fontSize:9,color:"var(--t3)"}}>{j?`${j.length} chars`:"—"}</span>
+        <button className="btn btn-p btn-sm" onClick={doJsonImport} disabled={!j.trim()}>Import</button>
       </div>
     </div>}
     {t==="ig"&&<div>
-      <textarea className="fta" style={{minHeight:140,fontFamily:"var(--f-mono)",fontSize:9}} value={gedIn} onChange={e=>{setGedIn(e.target.value);setPreview(null)}} placeholder="Paste GEDCOM atau pilih file .ged ..."/>
+      <textarea className="fta" style={{minHeight:140,fontFamily:"var(--f-mono)",fontSize:9}} value={gedIn} onChange={e=>{setGedIn(e.target.value);setGedParsed(null)}} placeholder="Paste GEDCOM atau pilih file .ged ..."/>
       <div style={{display:"flex",gap:6,marginTop:6,alignItems:"center",flexWrap:"wrap"}}>
-        <label className="btn btn-sm" style={{cursor:"pointer"}}><input type="file" accept=".ged,.gedcom" hidden onChange={e=>{const f=e.target.files[0];if(f)f.text().then(t=>{setGedIn(t);setPreview(null)})}}/> Pilih File .ged</label>
-        <button className="btn btn-sm" onClick={()=>{try{const m=GEDCOM.fromGedcom(gedIn);setPreview(m)}catch(e){alert("Error parsing GEDCOM: "+e.message)}}} disabled={!gedIn.trim()}>Preview</button>
-        {preview&&<button className="btn btn-p btn-sm" onClick={()=>{onImport(preview);onClose()}}>Import {preview.length} anggota</button>}
+        <label className="btn btn-sm" style={{cursor:"pointer"}}><input type="file" accept=".ged,.gedcom" hidden onChange={e=>{const f=e.target.files[0];if(f)f.text().then(t=>{setGedIn(t);setGedParsed(null)})}}/> Pilih File .ged</label>
+        <button className="btn btn-sm" onClick={parseGed} disabled={!gedIn.trim()}>Preview</button>
+        {gedParsed&&<button className="btn btn-p btn-sm" onClick={doGedImport}>Import {gedParsed.stats.indiCount} anggota</button>}
       </div>
-      {preview&&<div style={{marginTop:8,padding:"8px 10px",background:"var(--bg2)",borderRadius:6,fontSize:10,maxHeight:120,overflow:"auto"}}>
-        <div style={{fontWeight:600,marginBottom:4,color:"var(--pri)"}}>{preview.length} anggota terdeteksi:</div>
-        {preview.map((m,i)=><div key={i} style={{color:"var(--t2)",lineHeight:1.6}}>{m.gender==="male"?"♂":"♀"} {m.name}{m.birthDate?` · ${m.birthDate}`:""}{m.parentId?" · (ada parent)":""}{m.spouseId?" · (ada spouse)":""}</div>)}
+      {gedParsed&&<div style={{marginTop:8,padding:"8px 10px",background:"var(--bg2)",borderRadius:6,fontSize:10}}>
+        <div style={{fontWeight:600,color:"var(--pri)",marginBottom:4}}>{gedParsed.stats.indiCount} individu · {gedParsed.stats.famCount} keluarga</div>
+        <div style={{maxHeight:100,overflow:"auto"}}>{gedParsed.indis.map((m,i)=><div key={i} style={{color:"var(--t2)",lineHeight:1.6}}>{m.gender==="male"?"♂":"♀"} {m.name}{m.birthDate?` · ${m.birthDate}`:""}</div>)}</div>
       </div>}
-      <div style={{marginTop:8,fontSize:9,color:"var(--t3)",lineHeight:1.6}}>GEDCOM 5.5.1 dari: Gramps, MyHeritage, Ancestry, FamilySearch, dll. Data yang di-import: nama, gender, tanggal lahir/wafat, tempat lahir, catatan, hubungan keluarga.</div>
+      {result&&<div style={{marginTop:8,padding:"8px 10px",background:"var(--bg2)",borderRadius:6,fontSize:10,color:"var(--pri)"}}>Berhasil: {result.imported} · Keluarga: {result.families}{result.skipped>0?` · Skip duplikat: ${result.skipped}`:""}{result.failed>0?<span style={{color:"var(--rose)"}}> · Gagal: {result.failed}</span>:""}</div>}
+      <div style={{marginTop:6,fontSize:9,color:"var(--t3)"}}>GEDCOM 5.5.1 — duplikat otomatis dideteksi (nama+tanggal lahir).</div>
     </div>}
+    </>}
   </div></div></div>}
 
 // ═══════════════════════════════════════════════════════════════
