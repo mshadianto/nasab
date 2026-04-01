@@ -91,6 +91,9 @@ ALTER TABLE members ADD COLUMN nik TEXT DEFAULT '';
 -- Agama column (migration)
 ALTER TABLE members ADD COLUMN agama TEXT DEFAULT 'islam';
 
+-- No KK column (migration)
+ALTER TABLE members ADD COLUMN no_kk TEXT DEFAULT '';
+
 -- Marriages table for polygamy support
 CREATE TABLE IF NOT EXISTS marriages (
   id TEXT PRIMARY KEY,
