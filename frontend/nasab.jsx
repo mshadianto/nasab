@@ -751,6 +751,7 @@ function AuthScreen({onLogin}){
         <div className="auth-form">
           <h2>{mode==="login"?"Masuk":mode==="register"?"Daftar":"Reset Password"}</h2>
           <div className="sub">{mode==="login"?"Masuk ke akun NASAB Anda":mode==="register"?"Buat akun gratis — tanpa batas":"Masukkan email, nama terdaftar, dan password baru"}</div>
+          {mode==="register"&&<div style={{background:"var(--glass)",border:"1px solid var(--bd)",padding:"8px 10px",borderRadius:8,fontSize:11,color:"var(--t2)",marginBottom:4,lineHeight:1.5}}>ℹ️ Data <b>NIK</b> dan <b>Kartu Keluarga (KK)</b> bersifat <b>opsional</b> — bisa dilengkapi nanti saat menambah anggota keluarga.</div>}
           {err&&<div style={{background:"#3f1219",border:"1px solid #5f1d2d",color:"#fca5a5",padding:"7px 10px",borderRadius:6,fontSize:11,marginBottom:12}}>{err}</div>}
           {msg&&<div style={{background:"#132f1e",border:"1px solid #1d5f2d",color:"#86efac",padding:"7px 10px",borderRadius:6,fontSize:11,marginBottom:12}}>{msg}</div>}
           {(mode==="register"||mode==="forgot")&&<div className="fg"><label className="fl">Nama</label><input className="fi" value={name} onChange={e=>setName(e.target.value)} placeholder={mode==="forgot"?"Nama sesuai akun terdaftar":"Nama lengkap"}/></div>}
