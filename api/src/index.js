@@ -113,25 +113,46 @@ async function verifyPwPBKDF2(password, stored) {
   const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, km, 256);
   return btoa(String.fromCharCode(...new Uint8Array(bits))) === hB;
 }
+async function _signToken(payload, secret) {
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(payload) + secret));
+  return btoa(String.fromCharCode(...new Uint8Array(hash))).slice(0, 16);
+}
+function timingSafeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
 async function makeToken(userId, env) {
   const payload = { uid: userId, exp: Date.now() + 30 * 24 * 3600000 };
   const secret = env.TOKEN_SECRET || 'nasab-secret';
-  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(payload) + secret));
-  const sig = btoa(String.fromCharCode(...new Uint8Array(hash))).slice(0, 16);
+  const sig = await _signToken(payload, secret);
   return btoa(JSON.stringify(payload)) + '.' + sig;
 }
-async function verifyToken(token) {
+async function verifyToken(token, env) {
   try {
-    const [payloadB64] = token.split('.');
+    const [payloadB64, providedSig] = token.split('.');
+    if (!payloadB64 || !providedSig) return null;
     const payload = JSON.parse(atob(payloadB64));
+    if (!payload || !payload.uid || !payload.exp) return null;
     if (payload.exp < Date.now()) return null;
-    return payload.uid;
+    // Dual-key: try current TOKEN_SECRET first, fall back to legacy literal
+    // for tokens issued before TOKEN_SECRET was set as a Worker secret.
+    // Remove the 'nasab-secret' fallback after 30-day grace period.
+    const secrets = [];
+    if (env?.TOKEN_SECRET) secrets.push(env.TOKEN_SECRET);
+    secrets.push('nasab-secret');
+    for (const secret of secrets) {
+      const expected = await _signToken(payload, secret);
+      if (timingSafeEqual(providedSig, expected)) return payload.uid;
+    }
+    return null;
   } catch { return null; }
 }
-async function getAuthUser(request, DB) {
+async function getAuthUser(request, DB, env) {
   const auth = request.headers.get('Authorization');
   if (!auth?.startsWith('Bearer ')) return null;
-  const userId = await verifyToken(auth.slice(7));
+  const userId = await verifyToken(auth.slice(7), env);
   if (!userId) return null;
   return DB.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first();
 }
@@ -204,7 +225,7 @@ export default {
       }
 
       if (path === '/api/auth/me' && method === 'GET') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         return json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
       }
@@ -226,7 +247,7 @@ export default {
 
       // ── FAMILIES ──
       if (path === '/api/families' && method === 'GET') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const rows = isAdmin(user)
           ? await DB.prepare(`SELECT f.*, COALESCE(fc2.role, 'admin_view') as my_role, COUNT(DISTINCT m.id) as member_count, COUNT(DISTINCT CASE WHEN m.location_lat IS NOT NULL THEN m.id END) as geo_count, COUNT(DISTINCT fc.id) as collab_count FROM families f LEFT JOIN family_collaborators fc2 ON f.id = fc2.family_id AND fc2.user_id = ? LEFT JOIN members m ON f.id = m.family_id LEFT JOIN family_collaborators fc ON f.id = fc.family_id GROUP BY f.id ORDER BY f.updated_at DESC`).bind(user.id).all()
@@ -235,7 +256,7 @@ export default {
       }
 
       if (path === '/api/families' && method === 'POST') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         if (!await rateLimit(env.FAMILY_CREATE_LIMIT, `user:${user.id}`)) return err('Anda membuat keluarga terlalu cepat. Coba lagi dalam 1 menit.', 429);
         const { name, description } = await request.json();
@@ -253,7 +274,7 @@ export default {
       // ── FAMILY DETAIL ──
       const famMatch = path.match(/^\/api\/families\/([^/]+)$/);
       if (famMatch && method === 'GET') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const fid = famMatch[1];
         const [collab, family, membersR, collabsR, storiesR, posR, invitesR, marriagesR] = await Promise.all([
@@ -287,7 +308,7 @@ export default {
       // ── MEMBERS CRUD ──
       const memPath = path.match(/^\/api\/families\/([^/]+)\/members$/);
       if (memPath && method === 'POST') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const fid = memPath[1];
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
@@ -309,7 +330,7 @@ export default {
       // ── DELETE ALL MEMBERS ──
       const delAllPath = path.match(/^\/api\/families\/([^/]+)\/members\/all$/);
       if (delAllPath && method === 'DELETE') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const fid = delAllPath[1];
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
@@ -324,7 +345,7 @@ export default {
 
       const memDetail = path.match(/^\/api\/families\/([^/]+)\/members\/([^/]+)$/);
       if (memDetail && method === 'PUT') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const [, fid, mid] = memDetail;
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
@@ -338,7 +359,7 @@ export default {
       }
 
       if (memDetail && method === 'DELETE') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const [, fid, mid] = memDetail;
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
@@ -357,7 +378,7 @@ export default {
       // ── MARRIAGES ──
       const marPath = path.match(/^\/api\/families\/([^/]+)\/marriages$/);
       if (marPath && method === 'POST') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const fid = marPath[1];
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
@@ -377,7 +398,7 @@ export default {
 
       const marDel = path.match(/^\/api\/families\/([^/]+)\/marriages\/([^/]+)$/);
       if (marDel && method === 'DELETE') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const [, fid, mid] = marDel;
         await DB.prepare('DELETE FROM marriages WHERE id = ? AND family_id = ?').bind(mid, fid).run();
@@ -387,7 +408,7 @@ export default {
       // ── POSITIONS ──
       const posPath = path.match(/^\/api\/families\/([^/]+)\/positions$/);
       if (posPath && method === 'PUT') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const fid = posPath[1];
         const { positions } = await request.json();
@@ -403,7 +424,7 @@ export default {
       // ── STORIES ──
       const storyPath = path.match(/^\/api\/families\/([^/]+)\/stories$/);
       if (storyPath && method === 'POST') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const fid = storyPath[1];
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
@@ -417,7 +438,7 @@ export default {
 
       const storyDel = path.match(/^\/api\/families\/([^/]+)\/stories\/([^/]+)$/);
       if (storyDel && method === 'DELETE') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const [, fid, sid] = storyDel;
         await DB.prepare('DELETE FROM stories WHERE id = ? AND family_id = ?').bind(sid, fid).run();
@@ -427,7 +448,7 @@ export default {
       // ── INVITES ──
       const invPath = path.match(/^\/api\/families\/([^/]+)\/invite$/);
       if (invPath && method === 'POST') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const fid = invPath[1];
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
@@ -448,7 +469,7 @@ export default {
 
       // ── ADMIN ──
       if (path === '/api/admin/stats' && method === 'GET') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user || !isAdmin(user)) return err('Admin access required', 403);
         const tu = await DB.prepare('SELECT COUNT(*) as c FROM users').first();
         const tf = await DB.prepare('SELECT COUNT(*) as c FROM families').first();
@@ -458,7 +479,7 @@ export default {
       }
 
       if (path === '/api/admin/users' && method === 'GET') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user || !isAdmin(user)) return err('Admin access required', 403);
         const users = (await DB.prepare('SELECT u.id, u.name, u.email, u.role, u.created_at, COUNT(DISTINCT fc.family_id) as familyCount FROM users u LEFT JOIN family_collaborators fc ON u.id = fc.user_id GROUP BY u.id ORDER BY u.created_at DESC').all()).results;
         return json({ users });
@@ -466,7 +487,7 @@ export default {
 
       const adminUserRole = path.match(/^\/api\/admin\/users\/([^/]+)\/role$/);
       if (adminUserRole && method === 'PUT') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user || !isAdmin(user)) return err('Admin access required', 403);
         const targetId = adminUserRole[1];
         const { role } = await request.json();
@@ -483,7 +504,7 @@ export default {
 
       const adminUserDel = path.match(/^\/api\/admin\/users\/([^/]+)$/);
       if (adminUserDel && method === 'DELETE') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user || !isSuperAdmin(user)) return err('Super Admin access required', 403);
         const targetId = adminUserDel[1];
         if (targetId === user.id) return err('Tidak bisa menghapus diri sendiri');
@@ -494,7 +515,7 @@ export default {
       }
 
       if (path === '/api/admin/families' && method === 'GET') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user || !isAdmin(user)) return err('Admin access required', 403);
         const families = (await DB.prepare('SELECT f.*, u.name as owner_name, COUNT(DISTINCT m.id) as memberCount, COUNT(DISTINCT fc.id) as collabCount FROM families f JOIN users u ON f.owner_id = u.id LEFT JOIN members m ON f.id = m.family_id LEFT JOIN family_collaborators fc ON f.id = fc.family_id GROUP BY f.id ORDER BY f.updated_at DESC').all()).results;
         return json({ families });
@@ -503,7 +524,7 @@ export default {
       // ── BIOGRAPHIES ──
       const bioPath = path.match(/^\/api\/families\/([^/]+)\/biography$/);
       if (bioPath && method === 'POST') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const fid = bioPath[1];
         const { content, is_public } = await request.json();
@@ -526,7 +547,7 @@ export default {
 
       // ── MIGRATE NIK (temporary, run once) ──
       if (path === '/api/admin/migrate-nik' && method === 'POST') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user || !isSuperAdmin(user)) return err('Super Admin required', 403);
         const rows = (await DB.prepare("SELECT id, family_id, nik, no_kk FROM members WHERE (nik != '' AND nik NOT LIKE 'ENC:%') OR (no_kk != '' AND no_kk NOT LIKE 'ENC:%')").all()).results;
         let migrated = 0;
@@ -542,7 +563,7 @@ export default {
       // ── EVENTS ──
       const evtPath = path.match(/^\/api\/families\/([^/]+)\/events$/);
       if (evtPath && method === 'POST') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const fid = evtPath[1];
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
@@ -557,7 +578,7 @@ export default {
       }
 
       if (evtPath && method === 'GET') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const fid = evtPath[1];
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
@@ -568,7 +589,7 @@ export default {
 
       const evtDetail = path.match(/^\/api\/families\/([^/]+)\/events\/([^/]+)$/);
       if (evtDetail && method === 'PUT') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const [, fid, eid] = evtDetail;
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
@@ -580,7 +601,7 @@ export default {
       }
 
       if (evtDetail && method === 'DELETE') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const [, fid, eid] = evtDetail;
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
@@ -594,7 +615,7 @@ export default {
       const rsvpPath = path.match(/^\/api\/events\/([^/]+)\/rsvp$/);
       if (rsvpPath && method === 'POST') {
         const eid = rsvpPath[1];
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         const evt = await DB.prepare('SELECT * FROM events WHERE id = ?').bind(eid).first();
         if (!evt) return err('Event tidak ditemukan', 404);
         if (!user && !evt.is_public) return err('Unauthorized', 401);
@@ -632,7 +653,7 @@ export default {
       // ── FEED ──
       const feedPath = path.match(/^\/api\/families\/([^/]+)\/feed$/);
       if (feedPath && method === 'GET') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const fid = feedPath[1];
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
@@ -654,7 +675,7 @@ export default {
       // ── POSTS ──
       const postPath = path.match(/^\/api\/families\/([^/]+)\/posts$/);
       if (postPath && method === 'POST') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const fid = postPath[1];
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
@@ -669,7 +690,7 @@ export default {
 
       const postDel = path.match(/^\/api\/families\/([^/]+)\/posts\/([^/]+)$/);
       if (postDel && method === 'DELETE') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const [, fid, pid] = postDel;
         const post = await DB.prepare('SELECT * FROM posts WHERE id = ? AND family_id = ?').bind(pid, fid).first();
@@ -685,7 +706,7 @@ export default {
       // ── POST LIKES ──
       const likePath = path.match(/^\/api\/posts\/([^/]+)\/like$/);
       if (likePath && method === 'POST') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const pid = likePath[1];
         const existing = await DB.prepare('SELECT post_id FROM post_likes WHERE post_id = ? AND user_id = ?').bind(pid, user.id).first();
@@ -701,7 +722,7 @@ export default {
       // ── POST COMMENTS ──
       const cmtPath = path.match(/^\/api\/posts\/([^/]+)\/comments$/);
       if (cmtPath && method === 'POST') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const pid = cmtPath[1];
         const b = await request.json();
@@ -714,7 +735,7 @@ export default {
       // ── DELETE COMMENT ──
       const cmtDel = path.match(/^\/api\/comments\/([^/]+)$/);
       if (cmtDel && method === 'DELETE') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const cid = cmtDel[1];
         const cmt = await DB.prepare('SELECT * FROM post_comments WHERE id = ?').bind(cid).first();
@@ -726,7 +747,7 @@ export default {
 
       // ── ADMIN AUDIT ──
       if (path === '/api/admin/audit' && method === 'GET') {
-        const user = await getAuthUser(request, DB);
+        const user = await getAuthUser(request, DB, env);
         if (!user || !isAdmin(user)) return err('Admin required', 403);
         const fid = url.searchParams.get('family_id') || '';
         const action = url.searchParams.get('action') || '';
