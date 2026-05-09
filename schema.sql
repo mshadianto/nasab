@@ -111,6 +111,109 @@ CREATE INDEX IF NOT EXISTS idx_marriages_family ON marriages(family_id);
 CREATE INDEX IF NOT EXISTS idx_marriages_husband ON marriages(husband_id);
 CREATE INDEX IF NOT EXISTS idx_marriages_wife ON marriages(wife_id);
 
+-- Biographies table
+CREATE TABLE IF NOT EXISTS biographies (
+  id TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  content TEXT NOT NULL,
+  is_public INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+);
+
+-- Events
+CREATE TABLE IF NOT EXISTS events (
+  id TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  type TEXT DEFAULT 'lainnya',
+  description TEXT DEFAULT '',
+  event_date TEXT NOT NULL,
+  event_time TEXT DEFAULT '',
+  location_name TEXT DEFAULT '',
+  location_lat REAL,
+  location_lng REAL,
+  location_address TEXT DEFAULT '',
+  related_member_id TEXT,
+  created_by TEXT,
+  is_public INTEGER DEFAULT 0,
+  slug TEXT UNIQUE,
+  cover_template TEXT DEFAULT 'classic',
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS event_rsvps (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_id TEXT NOT NULL,
+  user_id TEXT,
+  guest_name TEXT DEFAULT '',
+  status TEXT DEFAULT 'pending',
+  message TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+);
+
+-- Feed
+CREATE TABLE IF NOT EXISTS posts (
+  id TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL,
+  author_id TEXT NOT NULL,
+  author_name TEXT DEFAULT '',
+  content TEXT NOT NULL,
+  post_type TEXT DEFAULT 'text',
+  related_member_id TEXT,
+  related_event_id TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS post_comments (
+  id TEXT PRIMARY KEY,
+  post_id TEXT NOT NULL,
+  author_id TEXT NOT NULL,
+  author_name TEXT DEFAULT '',
+  content TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS post_likes (
+  post_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (post_id, user_id),
+  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_family ON events(family_id);
+CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
+CREATE INDEX IF NOT EXISTS idx_events_slug ON events(slug);
+CREATE INDEX IF NOT EXISTS idx_rsvps_event ON event_rsvps(event_id);
+CREATE INDEX IF NOT EXISTS idx_posts_family ON posts(family_id);
+CREATE INDEX IF NOT EXISTS idx_comments_post ON post_comments(post_id);
+
+-- Audit logs
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id TEXT PRIMARY KEY,
+  timestamp TEXT DEFAULT (datetime('now')),
+  actor_id TEXT NOT NULL,
+  actor_name TEXT DEFAULT '',
+  actor_ip TEXT DEFAULT '',
+  actor_ua TEXT DEFAULT '',
+  action TEXT NOT NULL,
+  resource_type TEXT NOT NULL,
+  resource_id TEXT DEFAULT '',
+  family_id TEXT DEFAULT '',
+  details TEXT DEFAULT '',
+  severity TEXT DEFAULT 'info'
+);
+CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_logs(actor_id);
+CREATE INDEX IF NOT EXISTS idx_audit_family ON audit_logs(family_id);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_members_family ON members(family_id);
 CREATE INDEX IF NOT EXISTS idx_members_parent ON members(parent_id);
