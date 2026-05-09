@@ -827,11 +827,128 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 /* ── RESPONSIVE: Very small (≤360px) ── */
 @media(max-width:360px){
   .auth-brand h1{font-size:24px}
+  .auth-form-side{padding:18px 14px}
+  .auth-form h2{font-size:18px}
   .ws-brand span:not(h1){display:none}
+  .ws-brand h1{font-size:12px}
+  .ws-hdr{padding:5px 6px;gap:4px}
   .navt{padding:3px 5px;font-size:8px}
-  .btn-sm{padding:2px 5px;font-size:9px}
+  .btn-sm{padding:3px 5px;font-size:9px}
+  .sbox{min-width:60px;padding:3px 5px}
+  .sbox input{font-size:9px}
+  .ws-actions{gap:2px}
   .sg{grid-template-columns:1fr}
   .admin-stats{grid-template-columns:1fr}
+  .dash-grid{grid-template-columns:1fr;gap:12px}
+  .dash-hdr{padding:6px 10px;gap:4px}
+  .dash-hdr h1{font-size:14px}
+  .dash-user{font-size:10px;gap:3px}
+  .dash-user b{max-width:64px}
+  .dash-av{width:24px;height:24px;font-size:9px}
+  .dash-body{padding:10px}
+  .fam-card{padding:12px}
+  .fam-card h3{font-size:13px}
+  .fam-card p{font-size:10px}
+  .fam-card-stats{font-size:9px;gap:6px;flex-wrap:wrap}
+  .li{gap:6px;padding:6px 7px}
+  .li-av{width:26px;height:26px;font-size:9px;border-radius:5px}
+  .li-info h4{font-size:10px}
+  .li-info p{font-size:8px}
+  .li-badge{font-size:6px;padding:1px 3px}
+  .modal-ov{padding:6px}
+  .m-h{padding:10px 12px}
+  .m-h h2{font-size:14px}
+  .m-b{padding:10px 12px}
+  .m-f{padding:8px 12px;flex-wrap:wrap}
+  .cc-menu{min-width:108px}
+  .cc-menu-item{font-size:10px;padding:5px 8px}
+  .evt-card{min-width:118px;padding:9px}
+  .map-leg{min-width:100px;padding:6px 8px;font-size:9px}
+  .map-leg-i{font-size:8px}
+  .zm button{width:22px;height:22px;font-size:11px}
+  .mm{width:70px;height:38px;bottom:6px;left:6px}
+  .pov-bar{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .pov-bar::-webkit-scrollbar{display:none}
+  .fbar{padding:4px 6px;gap:3px}
+  .fbar select{font-size:8px}
+  .fbar label{font-size:7px}
+  .ftag{font-size:7px;padding:1px 5px}
+  .tl{padding:10px 10px 10px 28px}
+  .tl::before{left:10px}
+  .tl-dot{left:-20px;width:5px;height:5px}
+  .wr{padding:10px}
+  .wr-form{grid-template-columns:1fr;gap:8px}
+  .wr-sr{flex-wrap:wrap}
+  .wr-sr-amt{min-width:60px;font-size:9px}
+  .wr-sr-pct{min-width:36px;font-size:11px}
+  .wr-sr-info{flex:1 1 100%;order:-1}
+  .collab-i{padding:5px 7px;font-size:9px}
+  .collab-av{width:20px;height:20px;font-size:7px}
+  .geo-w{padding:5px 7px}
+  .ms-card{padding:22px 18px}
+  .wiz{max-width:100%;margin:0}
+  .wiz-step{padding:16px;min-height:200px}
+  .bnav-item{font-size:8px;padding:5px 0}
+  .bnav-icon{font-size:16px}
+  .chat-panel{width:calc(100vw - 24px);right:12px;bottom:74px}
+}
+/* ── RESPONSIVE: Tiny phones (≤320px, iPhone SE 1st gen / old Android) ── */
+@media(max-width:320px){
+  .auth-brand h1{font-size:22px}
+  .auth-brand p{font-size:11px}
+  .auth-form-side{padding:14px 12px}
+  .auth-form h2{font-size:16px}
+  .auth-form .sub{font-size:10px;margin-bottom:12px}
+  .fi,.fsel,.fta{font-size:11px;padding:6px 8px}
+  .btn-block{padding:8px;font-size:11px}
+  .ws-tag{display:none}
+  .ws-brand h1{font-size:11px}
+  .ws-hdr{padding:4px 5px;gap:3px}
+  .ws-actions{gap:2px}
+  .btn-sm{padding:2px 4px;font-size:8px}
+  .sbox{min-width:0;flex:1 1 50px;padding:3px 5px}
+  .sbox input{font-size:8px}
+  .dash-hdr{padding:5px 8px}
+  .dash-hdr h1{font-size:13px}
+  .dash-user b{max-width:50px;font-size:9px}
+  .dash-av{width:22px;height:22px;font-size:8px}
+  .dash-body{padding:8px}
+  .fam-card{padding:10px}
+  .fam-card h3{font-size:12px}
+  .fam-card p{font-size:9px;margin-bottom:6px}
+  .fam-card-stats{font-size:8px;gap:4px}
+  .li{gap:5px;padding:5px 6px}
+  .li-av{width:24px;height:24px;font-size:8px}
+  .li-info h4{font-size:9.5px}
+  .li-info p{font-size:7.5px}
+  .li-badge{font-size:6px;padding:1px 2px}
+  .modal{border-radius:10px 10px 0 0}
+  .m-h h2{font-size:13px}
+  .m-b{padding:8px 10px}
+  .ms-card{padding:18px 14px;border-radius:14px}
+  .ms-emoji{font-size:36px}
+  .ms-title{font-size:16px}
+  .ms-desc{font-size:11px}
+  .cc-menu{min-width:96px}
+  .evt-card{min-width:108px;padding:7px}
+  .map-leg{min-width:84px;font-size:8px;padding:5px 7px}
+  .map-leg-i{font-size:7px}
+  .zm{bottom:6px;right:6px}
+  .zm button{width:20px;height:20px;font-size:10px}
+  .mm{width:60px;height:32px}
+  .bnav{padding:3px 0 max(6px,env(safe-area-inset-bottom));border-radius:14px 14px 0 0}
+  .bnav-item{font-size:7.5px;padding:4px 0;gap:1px}
+  .bnav-icon{font-size:14px}
+  .chat-panel{width:calc(100vw - 16px);right:8px;bottom:70px;height:380px}
+  .pwa-banner{padding:6px 8px;gap:6px}
+  .pwa-text b{font-size:11px}
+  .pwa-text small{font-size:9px}
+  .toast{font-size:9px;padding:5px 10px;left:8px;right:8px;transform:none;max-width:none}
+  .wr-rh{padding:8px 10px}
+  .wr-rh h3{font-size:12px}
+  .wr-ig{padding:8px}
+  .far-table th,.far-table td{padding:4px 2px;font-size:8.5px}
+  .admin-table th,.admin-table td{padding:4px 3px;font-size:8.5px}
 }
 /* ── MILESTONE MODAL ── */
 .ms-ov{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:210;padding:16px}
