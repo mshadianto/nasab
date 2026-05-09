@@ -10,7 +10,7 @@ import LandingPage from "./src/LandingPage.jsx";
 const APP = { name: "NASAB", tagline: "Jaga Nasabmu", domain: "nasab.id", version: __APP_VERSION__, build: __APP_BUILD__, developer: { name: "M Sopian Hadianto", role: "GRC Expert & AI-Powered Builder", org: "Labbaik AI" } };
 const SK = "nasab-v5";
 // Card sizing — Hybrid avatar layout
-const CW = 176, CH = 132;   // Card width/height
+const CW = 176, CH = 120;   // Card width/height
 const GX = 44, GY = 148;    // Horizontal/vertical gap
 const CG = 18;              // Couple gap
 const AVATAR_R = 24;        // Avatar radius (48px diameter)
@@ -445,13 +445,21 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 .cvs{width:100%;height:100%;position:relative;overflow:hidden;background:var(--bg0);cursor:grab;touch-action:none;background-image:radial-gradient(circle at 1px 1px,var(--bdr) .5px,transparent 0);background-size:32px 32px}.cvs.grabbing{cursor:grabbing}
 .cvs-inner{position:absolute;top:0;left:0;transform-origin:0 0}
 /* Cards - glassmorphism */
-.cc{position:absolute;width:${CW}px;min-height:${CH}px;background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;cursor:grab;user-select:none;transition:transform .15s,box-shadow .2s,border-color .2s;overflow:visible;z-index:10;display:flex;flex-direction:column;align-items:center;padding-top:14px;backdrop-filter:blur(8px)}
+.cc{position:absolute;width:${CW}px;min-height:${CH}px;background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;cursor:grab;user-select:none;transition:transform .15s,box-shadow .2s,border-color .2s;overflow:visible;z-index:10;display:flex;flex-direction:column;align-items:center;padding-top:10px;backdrop-filter:blur(8px)}
 .cc:hover{z-index:20;border-color:var(--bdr2);box-shadow:0 4px 16px rgba(0,0,0,.35);transform:translateY(-1px)}
 .cc.dragging{z-index:50;box-shadow:0 8px 28px rgba(0,0,0,.5);opacity:.92;cursor:grabbing;transform:scale(1.02)}
 .cc.selected{border-color:var(--pri);box-shadow:0 0 0 2px rgba(20,184,166,.18),0 4px 16px rgba(0,0,0,.35)}
 .cc.male{border-top:${ACCENT_H}px solid var(--male-t)}.cc.female{border-top:${ACCENT_H}px solid var(--fem-t)}
 .cc.deceased{opacity:.62}.cc.deceased::after{content:'almh.';position:absolute;bottom:6px;right:8px;font-size:8px;font-family:var(--f-mono);color:var(--t3);font-weight:500;letter-spacing:.4px;pointer-events:none}
-.cc-av{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;font-family:var(--f-display);flex-shrink:0;background:var(--bg1);margin-bottom:8px;position:relative}
+.cc.b0{background:var(--bg2)}
+.cc.b1{background:linear-gradient(rgba(20,184,166,.05),rgba(20,184,166,.05)),var(--bg2)}
+.cc.b2{background:linear-gradient(rgba(99,102,241,.05),rgba(99,102,241,.05)),var(--bg2)}
+.cc.b3{background:linear-gradient(rgba(245,158,11,.05),rgba(245,158,11,.05)),var(--bg2)}
+.cc.b4{background:linear-gradient(rgba(236,72,153,.05),rgba(236,72,153,.05)),var(--bg2)}
+.cc.b5{background:linear-gradient(rgba(139,92,246,.05),rgba(139,92,246,.05)),var(--bg2)}
+.cc.b6{background:linear-gradient(rgba(249,115,22,.05),rgba(249,115,22,.05)),var(--bg2)}
+.cc.b7{background:linear-gradient(rgba(14,165,233,.05),rgba(14,165,233,.05)),var(--bg2)}
+.cc-av{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;font-family:var(--f-display);flex-shrink:0;background:var(--bg1);margin-bottom:6px;position:relative}
 .cc-av.male{color:var(--male-t);border:1.5px solid var(--male-bdr)}
 .cc-av.female{color:var(--fem-t);border:1.5px solid var(--fem-bdr)}
 .cc-status{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg2)}
@@ -927,7 +935,7 @@ const Ic={
   Share:()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>,
   Back:()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>,
 };
-const ini=n=>n.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+const ini=n=>{const w=(n||"").trim().split(/\s+/).filter(Boolean);if(w.length===0)return"?";if(w.length===1)return w[0].slice(0,2).toUpperCase();return(w[0][0]+w[1][0]).toUpperCase()};
 function DevFooter(){return(<div className="dev-footer"><span className="dev-name">{APP.developer.name}</span> — {APP.developer.role} · <span className="dev-org">{APP.developer.org}</span><div className="dev-ver">{APP.name} v{APP.version} · Build {APP.build}</div></div>)}
 
 // ═══════════════════════════════════════════════════════════════
@@ -1288,6 +1296,8 @@ function CanvasView({pp,allPP,marriages=[],onSel,selId,onPos,savedPos,povMode,se
   },[pp,collapsed]);
   useEffect(()=>{if(fitted.current&&Object.keys(pos).length>0)onPos(pos)},[pos]);
   const conns=useMemo(()=>getConns(pp,pos,marriages),[pp,pos,marriages]);
+  const rootMap=useMemo(()=>{const m={};pp.forEach(p=>{let cur=p;const seen=new Set();while(cur&&cur.parentId&&!seen.has(cur.id)){seen.add(cur.id);const next=pp.find(x=>x.id===cur.parentId);if(!next)break;cur=next}m[p.id]=cur?.id||p.id});return m},[pp]);
+  const branchIdx=useMemo(()=>{const idx={};const uniqueRoots=[...new Set(Object.values(rootMap))].sort();uniqueRoots.forEach((rid,i)=>{idx[rid]=i});return idx},[rootMap]);
   const bnd=useMemo(()=>{let mx=0,my=0;Object.values(pos).forEach(p=>{mx=Math.max(mx,p.x+CW+200);my=Math.max(my,p.y+CH+200)});return{w:Math.max(mx,2000),h:Math.max(my,1200)}},[pos]);
   const gls=useMemo(()=>{const l={};pp.forEach(p=>{const g=FE.gen(pp,p.id);const po=pos[p.id];if(!po)return;if(!l[g])l[g]={mi:po.y,mx:po.y+CH};l[g].mi=Math.min(l[g].mi,po.y);l[g].mx=Math.max(l[g].mx,po.y+CH)});return l},[pp,pos]);
   const cx=e=>e.touches?e.touches[0].clientX:e.clientX;const cy=e=>e.touches?e.touches[0].clientY:e.clientY;
@@ -1342,15 +1352,11 @@ function CanvasView({pp,allPP,marriages=[],onSel,selId,onPos,savedPos,povMode,se
           <circle cx={mx} cy={c.y1} r="9" fill="var(--bg1)" stroke="var(--rose)" strokeWidth="1"/>
           <text x={mx} y={c.y1+1} textAnchor="middle" dominantBaseline="central" fontSize="13" fill="var(--rose)">∞</text>
         </g>)}
-        if(c.t==="pd"){return<path key={i} d={`M ${c.x1} ${c.y1} L ${c.x2} ${c.y2}`} fill="none" stroke="var(--bdr2)" strokeWidth="1.5" opacity=".7"/>}
-        if(c.t==="br"){return<line key={i} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--bdr2)" strokeWidth="1.5" opacity=".7"/>}
-        if(c.t==="cd"){const dy=c.y2-c.y1;return<path key={i} d={`M ${c.x1} ${c.y1} C ${c.x1} ${c.y1+dy*0.5}, ${c.x2} ${c.y1+dy*0.5}, ${c.x2} ${c.y2}`} fill="none" stroke="var(--bdr2)" strokeWidth="1.5" opacity=".7"/>}
+        if(c.t==="pd"){return<path key={i} d={`M ${c.x1} ${c.y1} L ${c.x2} ${c.y2}`} fill="none" stroke="var(--t3)" strokeWidth="1.5" opacity=".9"/>}
+        if(c.t==="br"){return<line key={i} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--t3)" strokeWidth="1.5" opacity=".9"/>}
+        if(c.t==="cd"){const dy=c.y2-c.y1;return<path key={i} d={`M ${c.x1} ${c.y1} C ${c.x1} ${c.y1+dy*0.5}, ${c.x2} ${c.y1+dy*0.5}, ${c.x2} ${c.y2}`} fill="none" stroke="var(--t3)" strokeWidth="1.75" opacity=".9"/>}
         return null})}</svg>
-      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];const gl=GL[g]||{l:`Gen ${g+1}`};const bd=p.birthDate?new Date(p.birthDate).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}):"";const alive=!p.deathDate;const chCount=FE.ch(pp,p.id).length;const isCol=collapsed.has(p.id);const descCount=isCol?FE.desc(pp,p.id):0;const isBranch=povMode&&povBranches.some(b=>b.personId===p.id);const isDec=!!p.deathDate;const yr=p.birthDate?new Date(p.birthDate).getFullYear():null;const age=FE.age(p);const meta=[p.gender==="male"?"♂":"♀",yr?`${yr}`:null,age!==null?`${age} th`:null].filter(Boolean).join(" · ");return(<div key={p.id} className={`cc ${p.gender} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""} ${highlightId===p.id?"highlighted":""} ${isDec?"deceased":""}`} style={{left:po.x,top:po.y,width:CW,minHeight:CH}} onMouseDown={e=>dS(e,p.id)} onTouchStart={e=>dS(e,p.id)} onClick={e=>handleCardClick(e,p)}><span className="cc-badge-gen">G{g+1}</span>{p.nik&&<span className="cc-badge-nik">NIK</span>}<div className={`cc-av ${p.gender}`}>{ini(p.name)}<div className="cc-status" style={{background:alive?"#22c55e":"var(--t3)"}}/></div><div className="cc-nm">{p.name}</div><div className="cc-mt">{meta}</div>{chCount>0&&<div className="cc-toggle" onClick={e=>{e.stopPropagation();toggleCollapse(p.id)}} title={isCol?`Tampilkan ${descCount} keturunan`:"Sembunyikan"}>{isCol?`+${descCount}`:"\u2212"}</div>}{isBranch&&<div className="cc-branch" onClick={e=>{e.stopPropagation();switchPov(p.id)}} title={`Lihat keluarga ${p.name}`}>🔗 Cabang →</div>}{canEdit&&<button className="cc-add" onClick={e=>{e.stopPropagation();setCardMenuId(cardMenuId===p.id?null:p.id)}} title="Tambah anggota">+</button>}{cardMenuId===p.id&&<div className="cc-menu" onClick={e=>e.stopPropagation()}>{(()=>{const hasParent=!!p.parentId;const parentCount=p.parentId?1+(pp.find(x=>x.id===p.parentId)?.spouseId?1:0):0;const canAddParent=parentCount<2&&!hasParent;return[{k:'parent',i:'👆',l:'Orang Tua',dis:!canAddParent},{k:'spouse',i:'💍',l:'Pasangan',dis:false},{k:'child',i:'👶',l:'Anak',dis:false},{k:'sibling',i:'👥',l:'Saudara',dis:!p.parentId}].map(o=><button key={o.k} className="cc-menu-item" disabled={o.dis} onClick={()=>{setCardMenuId(null);onQuickAdd(o.k,p)}}><span className="cc-menu-icon" style={{borderColor:o.dis?'var(--bdr)':'var(--pri)'}}>{o.i}</span>{o.l}</button>)})()}</div>}</div>)})}
-    </div>
-    {/* Search overlay */}
-    <div className="cvs-search"><div style={{position:"relative"}}><span className="cvs-search-icon"><Ic.Search/></span><input ref={csRef} className="cvs-search-input" placeholder="Cari anggota..." value={csq} onChange={e=>setCsq(e.target.value)} onKeyDown={csKeyDown}/></div>
-      {csResults.length>0&&<div className="cvs-search-results">{csResults.map((r,i)=><div key={r.id} className={`cvs-search-item ${i===csIdx?"active":""}`} onClick={()=>focusNode(r)}><div className={`s-av ${r.gender}`} style={{background:r.gender==="male"?"var(--male-bg)":"var(--fem-bg)",color:r.gender==="male"?"var(--male-t)":"var(--fem-t)",border:`1px solid ${r.gender==="male"?"var(--male-bdr)":"var(--fem-bdr)"}`}}>{ini(r.name)}</div><div><div style={{fontWeight:600}}>{r.name}</div><div style={{fontSize:9,color:"var(--t3)"}}>{r.gender==="male"?"♂":"♀"} · Gen {FE.gen(pp,r.id)+1}</div></div></div>)}</div>}
+      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];const gl=GL[g]||{l:`Gen ${g+1}`};const bd=p.birthDate?new Date(p.birthDate).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}):"";const alive=!p.deathDate;const chCount=FE.ch(pp,p.id).length;const isCol=collapsed.has(p.id);const descCount=isCol?FE.desc(pp,p.id):0;const isBranch=povMode&&povBranches.some(b=>b.personId===p.id);const isDec=!!p.deathDate;const yr=p.birthDate?new Date(p.birthDate).getFullYear():null;const age=FE.age(p);const meta=[p.gender==="male"?"♂":"♀",yr?`${yr}`:null,age!==null?`${age} th`:null].filter(Boolean).join(" · ");return(<div key={p.id} className={`cc ${p.gender} b${branchIdx[rootMap[p.id]]%8} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""} ${highlightId===p.id?"highlighted":""} ${isDec?"deceased":""}`} style={{left:po.x,top:po.y,width:CW,minHeight:CH}} onMouseDown={e=>dS(e,p.id)} onTouchStart={e=>dS(e,p.id)} onClick={e=>handleCardClick(e,p)}><span className="cc-badge-gen">G{g+1}</span>{p.nik&&<span className="cc-badge-nik">NIK</span>}<div className={`cc-av ${p.gender}`}>{ini(p.name)}<div className="cc-status" style={{background:alive?"#22c55e":"var(--t3)"}}/></div><div className="cc-nm">{p.name}</div><div className="cc-mt">{meta}</div>{chCount>0&&<div className="cc-toggle" onClick={e=>{e.stopPropagation();toggleCollapse(p.id)}} title={isCol?`Tampilkan ${descCount} keturunan`:"Sembunyikan"}>{isCol?`+${descCount}`:"\u2212"}</div>}{isBranch&&<div className="cc-branch" onClick={e=>{e.stopPropagation();switchPov(p.id)}} title={`Lihat keluarga ${p.name}`}>🔗 Cabang →</div>}{canEdit&&<button className="cc-add" onClick={e=>{e.stopPropagation();setCardMenuId(cardMenuId===p.id?null:p.id)}} title="Tambah anggota">+</button>}{cardMenuId===p.id&&<div className="cc-menu" onClick={e=>e.stopPropagation()}>{(()=>{const hasParent=!!p.parentId;const parentCount=p.parentId?1+(pp.find(x=>x.id===p.parentId)?.spouseId?1:0):0;const canAddParent=parentCount<2&&!hasParent;return[{k:'parent',i:'👆',l:'Orang Tua',dis:!canAddParent},{k:'spouse',i:'💍',l:'Pasangan',dis:false},{k:'child',i:'👶',l:'Anak',dis:false},{k:'sibling',i:'👥',l:'Saudara',dis:!p.parentId}].map(o=><button key={o.k} className="cc-menu-item" disabled={o.dis} onClick={()=>{setCardMenuId(null);onQuickAdd(o.k,p)}}><span className="cc-menu-icon" style={{borderColor:o.dis?'var(--bdr)':'var(--pri)'}}>{o.i}</span>{o.l}</button>)})()}</div>}</div>)})}
     </div>
     {/* Zoom + collapse controls */}
     <div className="zm"><button onClick={()=>setZm(z=>Math.min(2.5,z+.12))}>+</button><button onClick={()=>setZm(z=>Math.max(.1,z-.12))}>−</button><button onClick={fit} title="Fit semua"><Ic.Fit/></button><button onClick={()=>comfortView(pos)} title="Zoom nyaman" style={{fontSize:10}}>🏠</button><button onClick={expandAll} title="Buka semua" style={{fontSize:9}}>⬇</button><button onClick={collapseAll} title="Tutup semua" style={{fontSize:9}}>⬆</button><div style={{fontSize:8,textAlign:"center",color:"var(--t3)",fontFamily:"var(--f-mono)"}}>{Math.round(zm*100)}%</div></div>
