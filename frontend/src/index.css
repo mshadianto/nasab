@@ -1,0 +1,66 @@
+/* Tailwind v4 — full import (preflight + utilities + JIT content scan).
+   We explicitly declare sources so both nasab.jsx (outside src/) and
+   LandingPage.jsx are scanned for class names. */
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────
+   LandingPage scroll shim — nasab.jsx sets body,#root{overflow:hidden}
+   for its app-shell layout. Override only while LandingPage is mounted.
+   ───────────────────────────────────────────────────────────── */
+body.landing-scroll,
+body.landing-scroll #root {
+  overflow: auto !important;
+  overflow-x: hidden !important;
+  height: auto !important;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
+}
+body.landing-scroll {
+  background: #fafaf9; /* stone-50, prevents flash of dark app bg */
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Preflight protection for nasab.jsx
+   Tailwind's preflight resets button/heading/img defaults. The app
+   relies on browser defaults in several places, so we restore them
+   OUTSIDE the landing page (body without .landing-scroll class).
+   ───────────────────────────────────────────────────────────── */
+body:not(.landing-scroll) button {
+  background-color: revert;
+  background-image: revert;
+  border: revert;
+  padding: revert;
+  font: revert;
+  color: revert;
+  cursor: pointer;
+}
+body:not(.landing-scroll) h1,
+body:not(.landing-scroll) h2,
+body:not(.landing-scroll) h3,
+body:not(.landing-scroll) h4,
+body:not(.landing-scroll) h5,
+body:not(.landing-scroll) h6 {
+  font-size: revert;
+  font-weight: revert;
+  margin: revert;
+}
+body:not(.landing-scroll) p,
+body:not(.landing-scroll) ul,
+body:not(.landing-scroll) ol {
+  margin: revert;
+  padding: revert;
+}
+body:not(.landing-scroll) ul,
+body:not(.landing-scroll) ol {
+  list-style: revert;
+}
+body:not(.landing-scroll) img,
+body:not(.landing-scroll) svg {
+  display: revert;
+  max-width: revert;
+}
+body:not(.landing-scroll) a {
+  color: revert;
+  text-decoration: revert;
+}
