@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import LandingPage from "./src/LandingPage.jsx";
 
 // ═══════════════════════════════════════════════════════════════════════
 // NASAB — Jaga Nasabmu
@@ -8,11 +9,18 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 
 const APP = { name: "NASAB", tagline: "Jaga Nasabmu", domain: "nasab.id", version: __APP_VERSION__, build: __APP_BUILD__, developer: { name: "M Sopian Hadianto", role: "GRC Expert & AI-Powered Builder", org: "Labbaik AI" } };
 const SK = "nasab-v5";
-const CW = 150, CH = 80, GX = 24, GY = 100, CG = 8;
-const VW = { CANVAS:"canvas",MAP:"map",LIST:"list",STATS:"stats",TIMELINE:"timeline",INSIGHTS:"insights" };
+// Card sizing — Hybrid avatar layout
+const CW = 176, CH = 132;   // Card width/height
+const GX = 44, GY = 148;    // Horizontal/vertical gap
+const CG = 18;              // Couple gap
+const AVATAR_R = 24;        // Avatar radius (48px diameter)
+const ACCENT_H = 3;         // Top accent bar height
+const VW = { CANVAS:"canvas",MAP:"map",LIST:"list",STATS:"stats",TIMELINE:"timeline",INSIGHTS:"insights",KELUARGA:"keluarga" };
 const RL = { OWNER:"owner",EDITOR:"editor",VIEWER:"viewer" };
 const GL = [{l:"Kakek/Nenek",i:"👴"},{l:"Ayah/Ibu",i:"👨‍👩‍👧‍👦"},{l:"Anak",i:"🧒"},{l:"Cucu",i:"👶"},{l:"Cicit",i:"🌱"},{l:"Canggah",i:"🌿"}];
 const GC = ["#14b8a6","#6366f1","#f59e0b","#ec4899","#8b5cf6","#f97316"];
+const EVT=[{id:'nikah',l:'Pernikahan',i:'💍'},{id:'aqiqah',l:'Aqiqah',i:'🐑'},{id:'khitan',l:'Khitanan',i:'🎉'},{id:'syukuran',l:'Syukuran',i:'🤲'},{id:'reuni',l:'Reuni Keluarga',i:'👨‍👩‍👧‍👦'},{id:'tahlilan',l:'Tahlilan',i:'📿'},{id:'arisan',l:'Arisan',i:'💰'},{id:'milad',l:'Ulang Tahun',i:'🎂'},{id:'wisuda',l:'Wisuda',i:'🎓'},{id:'lainnya',l:'Lainnya',i:'📅'}];
+const ATYP=[{id:'cash',l:'Tabungan',i:'💰',u:'Rp'},{id:'gold',l:'Emas',i:'🥇',u:'gram'},{id:'property',l:'Properti',i:'🏠',u:'Rp'},{id:'vehicle',l:'Kendaraan',i:'🚗',u:'Rp'},{id:'stock',l:'Saham Syariah',i:'📈',u:'Rp'},{id:'deposit',l:'Deposito',i:'🏦',u:'Rp'},{id:'business',l:'Usaha',i:'🏢',u:'Rp'},{id:'receivable',l:'Piutang',i:'📋',u:'Rp'},{id:'other',l:'Lainnya',i:'📦',u:'Rp'}];
 
 // ─── NIK INTELLIGENCE ─────────────────────────────────────────
 const PROV={11:{n:"Aceh",lt:5.55,ln:95.32},12:{n:"Sumatera Utara",lt:3.59,ln:98.67},13:{n:"Sumatera Barat",lt:-0.95,ln:100.35},14:{n:"Riau",lt:0.51,ln:101.45},15:{n:"Jambi",lt:-1.61,ln:103.61},16:{n:"Sumatera Selatan",lt:-2.99,ln:104.76},17:{n:"Bengkulu",lt:-3.79,ln:102.26},18:{n:"Lampung",lt:-5.45,ln:105.26},19:{n:"Bangka Belitung",lt:-2.13,ln:106.14},21:{n:"Kepulauan Riau",lt:1.07,ln:104.03},31:{n:"DKI Jakarta",lt:-6.21,ln:106.85},32:{n:"Jawa Barat",lt:-6.92,ln:107.61},33:{n:"Jawa Tengah",lt:-7.15,ln:110.42},34:{n:"DI Yogyakarta",lt:-7.80,ln:110.36},35:{n:"Jawa Timur",lt:-7.54,ln:112.24},36:{n:"Banten",lt:-6.12,ln:106.15},51:{n:"Bali",lt:-8.41,ln:115.19},52:{n:"NTB",lt:-8.65,ln:116.32},53:{n:"NTT",lt:-10.18,ln:123.61},61:{n:"Kalimantan Barat",lt:-0.02,ln:109.34},62:{n:"Kalimantan Tengah",lt:-1.68,ln:113.38},63:{n:"Kalimantan Selatan",lt:-3.32,ln:114.59},64:{n:"Kalimantan Timur",lt:-1.24,ln:116.85},65:{n:"Kalimantan Utara",lt:3.07,ln:116.04},71:{n:"Sulawesi Utara",lt:1.49,ln:124.84},72:{n:"Sulawesi Tengah",lt:-1.43,ln:121.45},73:{n:"Sulawesi Selatan",lt:-5.14,ln:119.42},74:{n:"Sulawesi Tenggara",lt:-3.97,ln:122.51},75:{n:"Gorontalo",lt:0.54,ln:123.06},76:{n:"Sulawesi Barat",lt:-2.84,ln:119.23},81:{n:"Maluku",lt:-3.70,ln:128.17},82:{n:"Maluku Utara",lt:1.57,ln:127.81},91:{n:"Papua",lt:-2.54,ln:140.72},92:{n:"Papua Barat",lt:-1.34,ln:133.17}};
@@ -116,6 +124,7 @@ const API={
   async addMember(fid,m){return this._f(`/api/families/${fid}/members`,{method:'POST',body:JSON.stringify(mToAPI(m))})},
   async updateMember(fid,mid,m){return this._f(`/api/families/${fid}/members/${mid}`,{method:'PUT',body:JSON.stringify(mToAPI(m))})},
   async deleteMember(fid,mid){return this._f(`/api/families/${fid}/members/${mid}`,{method:'DELETE'})},
+  async deleteAllMembers(fid){return this._f(`/api/families/${fid}/members/all`,{method:'DELETE'})},
   async savePositions(fid,positions){return this._f(`/api/families/${fid}/positions`,{method:'PUT',body:JSON.stringify({positions})})},
   async addStory(fid,s){return this._f(`/api/families/${fid}/stories`,{method:'POST',body:JSON.stringify({text:s.text,person_id:s.personId,person_name:s.personName})})},
   async deleteStory(fid,sid){return this._f(`/api/families/${fid}/stories/${sid}`,{method:'DELETE'})},
@@ -127,13 +136,57 @@ const API={
   async adminFamilies(){return(await this._f('/api/admin/families')).families},
   async setUserRole(uid,role){return this._f(`/api/admin/users/${uid}/role`,{method:'PUT',body:JSON.stringify({role})})},
   async deleteUser(uid){return this._f(`/api/admin/users/${uid}`,{method:'DELETE'})},
+  async adminAudit(params={}){const q=new URLSearchParams(params).toString();return(await this._f(`/api/admin/audit?${q}`)).logs},
+  // Events
+  async getEvents(fid){return(await this._f(`/api/families/${fid}/events`)).events},
+  async createEvent(fid,e){return this._f(`/api/families/${fid}/events`,{method:'POST',body:JSON.stringify(e)})},
+  async updateEvent(fid,eid,e){return this._f(`/api/families/${fid}/events/${eid}`,{method:'PUT',body:JSON.stringify(e)})},
+  async deleteEvent(fid,eid){return this._f(`/api/families/${fid}/events/${eid}`,{method:'DELETE'})},
+  async rsvp(eid,data){return this._f(`/api/events/${eid}/rsvp`,{method:'POST',body:JSON.stringify(data)})},
+  async getPublicEvent(slug){return this._f(`/api/events/public/${slug}`)},
+  // Feed
+  async getFeed(fid){return(await this._f(`/api/families/${fid}/feed`)).posts},
+  async createPost(fid,p){return this._f(`/api/families/${fid}/posts`,{method:'POST',body:JSON.stringify(p)})},
+  async deletePost(fid,pid){return this._f(`/api/families/${fid}/posts/${pid}`,{method:'DELETE'})},
+  async toggleLike(pid){return this._f(`/api/posts/${pid}/like`,{method:'POST'})},
+  async addComment(pid,content){return this._f(`/api/posts/${pid}/comments`,{method:'POST',body:JSON.stringify({content})})},
+  async deleteComment(cid){return this._f(`/api/comments/${cid}`,{method:'DELETE'})},
   clearSession(){this.token=null;localStorage.removeItem(TK)},
   hasSession(){return!!this.token}
 };
 
+// ─── AI ABSTRACTION ─────────────────────────────────────────
+async function callGroq(prompt,systemPrompt=''){
+  const key=localStorage.getItem('nasab-groq-key');if(!key)throw new Error('Groq API key belum diset');
+  const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[...(systemPrompt?[{role:'system',content:systemPrompt}]:[]),{role:'user',content:prompt}],max_tokens:2000,temperature:0.7})});
+  const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;
+}
+async function callClaude(prompt){
+  const key=localStorage.getItem('nasab-claude-key');if(!key)throw new Error('Claude API key belum diset');
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:prompt}]})});
+  const j=await r.json();return j.content?.[0]?.text||'Gagal generate';
+}
+async function callGemini(prompt,systemPrompt=''){
+  const key=localStorage.getItem('nasab-gemini-key');if(!key)throw new Error('Gemini API key belum diset');
+  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:(systemPrompt?systemPrompt+'\n\n':'')+prompt}]}],generationConfig:{maxOutputTokens:2000,temperature:0.7}})});
+  const d=await r.json();if(d.error)throw new Error(d.error.message);return d.candidates?.[0]?.content?.parts?.[0]?.text||'Gagal generate';
+}
+const AI_PROVIDERS={groq:{l:'Groq',k:'nasab-groq-key',d:'Gratis & cepat (Llama 3)'},claude:{l:'Claude',k:'nasab-claude-key',d:'Lebih detail (Anthropic)'},gemini:{l:'Gemini',k:'nasab-gemini-key',d:'Gratis (Google AI)'}};
+async function callAI(prompt,systemPrompt=''){
+  const prov=localStorage.getItem('nasab-ai-provider')||'groq';
+  if(prov==='gemini')return callGemini(prompt,systemPrompt);
+  return prov==='claude'?callClaude(prompt):callGroq(prompt,systemPrompt);
+}
+
 // ─── FAMILY ENGINE ───────────────────────────────────────────
 const FE={
   ch:(pp,pid)=>pp.filter(p=>p.parentId===pid),
+  // chAll: includes spouse's children (for display/counting, NOT layout)
+  chAll:(pp,pid,marriages)=>{const direct=pp.filter(p=>p.parentId===pid);if(direct.length)return direct;
+    const person=pp.find(p=>p.id===pid);if(!person)return[];
+    if(person.spouseId){const sc=pp.filter(p=>p.parentId===person.spouseId);if(sc.length)return sc}
+    if(marriages){const ms=marriages.filter(m=>m.husbandId===pid||m.wifeId===pid);for(const mr of ms){const pid2=mr.husbandId===pid?mr.wifeId:mr.husbandId;const mc=pp.filter(p=>p.parentId===pid2);if(mc.length)return mc}}
+    return[]},
   sp:(pp,p)=>p.spouseId?pp.find(x=>x.id===p.spouseId)||null:null,
   // All spouses via marriages table (polygamy). Falls back to spouseId if no marriages.
   spouses:(pp,p,marriages=[])=>{const ms=marriages.filter(m=>m.husbandId===p.id||m.wifeId===p.id);if(ms.length){const sids=[...new Set(ms.map(m=>m.husbandId===p.id?m.wifeId:m.husbandId))];return sids.map(sid=>pp.find(x=>x.id===sid)).filter(Boolean)}return p.spouseId?[pp.find(x=>x.id===p.spouseId)].filter(Boolean):[]},
@@ -142,6 +195,7 @@ const FE={
   roots:(pp,marriages=[])=>pp.filter(p=>!p.parentId&&!pp.some(x=>x.spouseId===p.id&&x.parentId)&&!marriages.some(m=>m.wifeId===p.id&&pp.find(h=>h.id===m.husbandId)?.parentId)),
   gen:(pp,pid,g=0)=>{const p=pp.find(x=>x.id===pid);return(!p||!p.parentId)?g:FE.gen(pp,p.parentId,g+1)},
   desc:(pp,pid)=>{const c=FE.ch(pp,pid);return c.reduce((s,x)=>s+1+FE.desc(pp,x.id),0)},
+  descAll:(pp,pid,marriages)=>{const c=FE.chAll(pp,pid,marriages);return c.reduce((s,x)=>s+1+FE.descAll(pp,x.id,marriages),0)},
   age:(p)=>{if(!p.birthDate)return null;const b=new Date(p.birthDate),e=p.deathDate?new Date(p.deathDate):new Date();let a=e.getFullYear()-b.getFullYear();if(e.getMonth()<b.getMonth()||(e.getMonth()===b.getMonth()&&e.getDate()<b.getDate()))a--;return a},
   stats:(pp)=>{const t=pp.length,m=pp.filter(p=>p.gender==="male").length,f=t-m,lv=pp.filter(p=>!p.deathDate).length;const mg=Math.max(0,...pp.map(p=>FE.gen(pp,p.id)));const pr=pp.filter(p=>FE.ch(pp,p.id).length>0);const ac=pr.length?(pr.reduce((s,p)=>s+FE.ch(pp,p.id).length,0)/pr.length).toFixed(1):0;const geo=pp.filter(p=>p.location?.lat).length;return{total:t,males:m,females:f,living:lv,deceased:t-lv,generations:mg+1,avgChildren:ac,geotagged:geo}},
   search:(pp,q)=>{const s=q.toLowerCase().trim();return!s?pp:pp.filter(p=>p.name.toLowerCase().includes(s)||(p.birthPlace||"").toLowerCase().includes(s)||(p.notes||"").toLowerCase().includes(s))},
@@ -157,31 +211,113 @@ const FE={
   filter(pp,f){let r=[...pp];if(f.gender&&f.gender!=="all")r=r.filter(p=>p.gender===f.gender);if(f.generation!==undefined&&f.generation!=="all")r=r.filter(p=>FE.gen(pp,p.id)===parseInt(f.generation));if(f.status==="living")r=r.filter(p=>!p.deathDate);if(f.status==="deceased")r=r.filter(p=>p.deathDate);if(f.location)r=r.filter(p=>(p.location?.address||"").toLowerCase().includes(f.location.toLowerCase()));if(f.nik==="has")r=r.filter(p=>p.nik&&p.nik.length>0);if(f.nik==="none")r=r.filter(p=>!p.nik||p.nik.length===0);if(f.provNik&&f.provNik!=="all")r=r.filter(p=>p.nik&&p.nik.length>=2&&parseInt(p.nik.slice(0,2))===parseInt(f.provNik));return r},
 };
 
+// ─── DATA QUALITY CHECKER ───────────────────────────────────
+function validateFamilyData(pp,marriages){
+  const issues=[];
+  pp.forEach(p=>{
+    if(p.parentId&&p.birthDate){const par=pp.find(x=>x.id===p.parentId);if(par?.birthDate){const gap=new Date(p.birthDate).getFullYear()-new Date(par.birthDate).getFullYear();
+      if(gap<12)issues.push({sev:'critical',msg:`${p.name} lahir ${gap} tahun setelah ${par.name} — terlalu dekat`,person:p});
+      if(gap>70)issues.push({sev:'warning',msg:`${p.name} lahir ${gap} tahun setelah ${par.name} — sangat jauh`,person:p})}}
+    if(p.deathDate){pp.filter(c=>c.parentId===p.id&&c.birthDate).forEach(c=>{const diff=Math.floor((new Date(c.birthDate)-new Date(p.deathDate))/864e5);
+      if(diff>280)issues.push({sev:'warning',msg:`${c.name} lahir ${diff} hari setelah ${p.name} wafat`,person:c})})}
+    if(p.nik&&p.nik.length===16){const dups=pp.filter(x=>x.id!==p.id&&x.nik===p.nik);
+      if(dups.length)issues.push({sev:'critical',msg:`NIK ${p.name} sama dengan ${dups.map(d=>d.name).join(', ')}`,person:p})}
+    if(p.birthDate&&new Date(p.birthDate)>new Date())issues.push({sev:'warning',msg:`${p.name} tanggal lahir di masa depan`,person:p});
+    if(p.birthDate&&p.deathDate&&new Date(p.deathDate)<new Date(p.birthDate))issues.push({sev:'critical',msg:`${p.name} wafat sebelum lahir`,person:p});
+    if(!p.parentId&&!p.spouseId&&!pp.some(c=>c.parentId===p.id)&&!marriages.some(m=>m.husbandId===p.id||m.wifeId===p.id))issues.push({sev:'info',msg:`${p.name} tidak terhubung ke siapapun`,person:p});
+    if(!p.birthDate)issues.push({sev:'info',msg:`${p.name} belum ada tanggal lahir`,person:p});
+    if(!p.gender||(p.gender!=='male'&&p.gender!=='female'))issues.push({sev:'warning',msg:`${p.name} gender tidak valid`,person:p});
+  });
+  return issues.sort((a,b)=>({critical:0,warning:1,info:2}[a.sev]||2)-({critical:0,warning:1,info:2}[b.sev]||2));
+}
+
+// ─── POV TREE (MyHeritage-style branch navigation) ──────────
+// Descendants of root, including children co-parented via a spouse (parent_id points to spouse)
+function bloodDescendants(pp,rootId,marriages=[]){
+  const desc=new Set();const q=[rootId];
+  while(q.length){const id=q.shift();if(desc.has(id))continue;desc.add(id);
+    FE.ch(pp,id).forEach(c=>q.push(c.id));
+    // Children via co-parent (spouse): their parent_id may point to spouse, not this person
+    marriages.filter(m=>m.husbandId===id||m.wifeId===id).forEach(m=>{
+      const sid=m.husbandId===id?m.wifeId:m.husbandId;
+      FE.ch(pp,sid).forEach(c=>q.push(c.id))});
+    const p=pp.find(x=>x.id===id);if(p?.spouseId)FE.ch(pp,p.spouseId).forEach(c=>q.push(c.id));
+  }
+  desc.delete(rootId);return desc;
+}
+function isBloodRelative(pp,personId,rootId,marriages=[]){
+  if(personId===rootId)return true;
+  // Root's ancestor chain
+  const rootAnc=new Set();let cur=rootId;
+  while(cur){rootAnc.add(cur);const p=pp.find(x=>x.id===cur);cur=p?.parentId||null}
+  // Person or any of their ancestors in root's ancestry → blood relative
+  cur=personId;while(cur){if(rootAnc.has(cur))return true;const p=pp.find(x=>x.id===cur);cur=p?.parentId||null}
+  // Person is descendant of root (including co-parented via spouse)
+  return bloodDescendants(pp,rootId,marriages).has(personId);
+}
+function getPOVMembers(pp,rootId,marriages=[]){
+  const root=pp.find(p=>p.id===rootId);
+  if(!root)return{visible:pp,branches:[]};
+  const vis=new Set([rootId]);const branches=[];
+  const addBranch=(sid)=>{if(!isBloodRelative(pp,sid,rootId,marriages)&&!branches.some(b=>b.personId===sid)){
+    const sp=pp.find(x=>x.id===sid);if(sp)branches.push({personId:sid,name:sp.name})}};
+  // Ancestors upward (include each ancestor's spouses)
+  const addAnc=pid=>{const p=pp.find(x=>x.id===pid);if(!p)return;if(p.parentId){vis.add(p.parentId);
+    const par=pp.find(x=>x.id===p.parentId);if(par)FE.spouses(pp,par,marriages).forEach(s=>vis.add(s.id));
+    addAnc(p.parentId)}};
+  addAnc(rootId);
+  // Descendants downward — traverse direct children AND children co-parented via spouses
+  const seen=new Set();
+  const addDesc=pid=>{if(seen.has(pid))return;seen.add(pid);
+    const person=pp.find(x=>x.id===pid);
+    const kids=new Map();
+    FE.ch(pp,pid).forEach(c=>kids.set(c.id,c));
+    marriages.filter(m=>m.husbandId===pid||m.wifeId===pid).forEach(m=>{
+      const sid=m.husbandId===pid?m.wifeId:m.husbandId;vis.add(sid);addBranch(sid);
+      FE.ch(pp,sid).forEach(c=>kids.set(c.id,c))});
+    if(person?.spouseId){vis.add(person.spouseId);addBranch(person.spouseId);
+      FE.ch(pp,person.spouseId).forEach(c=>kids.set(c.id,c))}
+    kids.forEach(child=>{vis.add(child.id);
+      FE.spouses(pp,child,marriages).forEach(s=>{vis.add(s.id);addBranch(s.id)});
+      addDesc(child.id)});
+  };
+  addDesc(rootId);
+  // Root's spouses (redundant with addDesc but kept for the branch-label path)
+  FE.spouses(pp,root,marriages).forEach(s=>{vis.add(s.id);addBranch(s.id)});
+  // Root's siblings + their descendants
+  FE.sib(pp,root).forEach(s=>{vis.add(s.id);addDesc(s.id)});
+  return{visible:pp.filter(p=>vis.has(p.id)),branches};
+}
+
 // ─── LAYOUT / CONNECTORS ─────────────────────────────────────
 const MAX_COLS=4; // wrap siblings after this many
-function autoLayout(pp,marriages=[],collapsed=new Set()){const roots=FE.roots(pp,marriages);const pos={};
-  function isVis(pid){// check if any ancestor is collapsed
-    let cur=pp.find(x=>x.id===pid);while(cur&&cur.parentId){if(collapsed.has(cur.parentId))return false;cur=pp.find(x=>x.id===cur.parentId)}return true}
-  function lay(pid,d){const p=pp.find(x=>x.id===pid);if(!p||pos[pid])return{x:0,w:0};const sps=FE.spouses(pp,p,marriages);const ch=collapsed.has(pid)?[]:FE.ch(pp,pid).filter(c=>isVis(c.id));const spCount=sps.filter(s=>!pos[s.id]).length;const cw=CW+(spCount*(CW+CG));
-    if(!ch.length){const y=d*(CH+GY);pos[pid]={x:0,y};let sx=CW+CG;sps.forEach(s=>{if(!pos[s.id]){pos[s.id]={x:sx,y};sx+=CW+CG}});return{x:0,w:cw}}
-    // Compact: wrap children into rows if >MAX_COLS
+function autoLayout(pp,marriages=[],collapsed=new Set()){const roots=FE.roots(pp,marriages);const pos={};const HGAP=GX+8;
+  function isVis(pid){let cur=pp.find(x=>x.id===pid);while(cur&&cur.parentId){if(collapsed.has(cur.parentId))return false;cur=pp.find(x=>x.id===cur.parentId)}return true}
+  // Width of person card + spouse cards
+  function unitW(pid){const p=pp.find(x=>x.id===pid);if(!p)return CW;return CW+FE.spouses(pp,p,marriages).length*(CW+CG)}
+  // Cached subtree width (horizontal) and height (generation rows)
+  const wC={},hC={};
+  function stW(pid){if(wC[pid]!=null)return wC[pid];const ch=(collapsed.has(pid)?[]:FE.ch(pp,pid)).filter(c=>isVis(c.id));const uw=unitW(pid);
+    if(!ch.length)return(wC[pid]=uw);const rows=[];for(let i=0;i<ch.length;i+=MAX_COLS)rows.push(ch.slice(i,i+MAX_COLS));
+    let maxRW=0;rows.forEach(row=>{maxRW=Math.max(maxRW,row.reduce((s,c,i)=>s+(i?HGAP:0)+stW(c.id),0))});return(wC[pid]=Math.max(uw,maxRW))}
+  function stH(pid){if(hC[pid]!=null)return hC[pid];const ch=(collapsed.has(pid)?[]:FE.ch(pp,pid)).filter(c=>isVis(c.id));
+    if(!ch.length)return(hC[pid]=1);const rows=[];for(let i=0;i<ch.length;i+=MAX_COLS)rows.push(ch.slice(i,i+MAX_COLS));
+    let h=0;rows.forEach(row=>{h+=Math.max(...row.map(c=>stH(c.id)))});return(hC[pid]=1+h)}
+  // Top-down absolute positioning — no shift() needed
+  function place(pid,x,d){const p=pp.find(z=>z.id===pid);if(!p||pos[pid])return;
+    const ch=(collapsed.has(pid)?[]:FE.ch(pp,pid)).filter(c=>isVis(c.id));const uw=unitW(pid);const sw=stW(pid);const y=d*(CH+GY);
+    // Center person+spouses within subtree width
+    pos[pid]={x:x+(sw-uw)/2,y};const sps=FE.spouses(pp,p,marriages);let sx=pos[pid].x+CW+CG;
+    sps.forEach(s=>{if(!pos[s.id]){pos[s.id]={x:sx,y};sx+=CW+CG}});
+    if(!ch.length)return;
     const rows=[];for(let i=0;i<ch.length;i+=MAX_COLS)rows.push(ch.slice(i,i+MAX_COLS));
-    const cls=[];let cur=0;let rowY=0;
-    rows.forEach((row,ri)=>{const rowCls=[];let rowCur=0;
-      row.forEach(c=>{const cl=lay(c.id,d+1+ri);rowCls.push({...cl,offset:cur+rowCur});rowCur+=cl.w+GX});
-      rowCls.forEach(c=>cls.push(c));cur=Math.max(cur,rowCur-GX+cur);
-      // If multiple rows, shift subsequent rows down
-      if(ri>0)row.forEach(c=>shiftY(c.id,(CH+GY)*ri));
-      rowY=ri});
-    const tcw=Math.max(...cls.map(c=>c.offset+c.w))-Math.min(...cls.map(c=>c.offset));
-    const cx=(cls[0].offset+cls[cls.length-1].offset+cls[cls.length-1].w)/2-cw/2;const px=Math.max(0,cx);
-    const y=d*(CH+GY);pos[pid]={x:px,y};let sx=px+CW+CG;sps.forEach(s=>{if(!pos[s.id]){pos[s.id]={x:sx,y};sx+=CW+CG}});
-    const minOff=Math.min(...cls.map(c=>c.offset));const cbx=px+cw/2-tcw/2-minOff;
-    ch.forEach((c,i)=>shift(c.id,cbx+cls[i].offset));
-    return{x:Math.min(px,cbx+minOff),w:Math.max(px+cw,cbx+minOff+tcw)-Math.min(px,cbx+minOff)}}
-  function shift(pid,dx){if(!pos[pid])return;pos[pid].x+=dx;const sps=FE.spouses(pp,pp.find(x=>x.id===pid),marriages);sps.forEach(s=>{if(pos[s.id])pos[s.id].x+=dx});FE.ch(pp,pid).forEach(c=>shift(c.id,dx))}
-  function shiftY(pid,dy){if(!pos[pid])return;pos[pid].y+=dy;const sps=FE.spouses(pp,pp.find(x=>x.id===pid),marriages);sps.forEach(s=>{if(pos[s.id])pos[s.id].y+=dy});FE.ch(pp,pid).forEach(c=>shiftY(c.id,dy))}
-  let gc=0;roots.forEach(root=>{const r=lay(root.id,0);const sh=gc;const sa=pid=>{if(pos[pid])pos[pid].x+=sh;const sps=FE.spouses(pp,pp.find(x=>x.id===pid),marriages);sps.forEach(s=>{if(pos[s.id])pos[s.id].x+=sh});FE.ch(pp,pid).forEach(c=>sa(c.id))};sa(root.id);gc+=r.w+GX*3});
+    // Place each row — yOff tracks cumulative generation offset so wrapped rows don't overlap grandchildren
+    let yOff=0;rows.forEach(row=>{const rowW=row.reduce((s,c,i)=>s+(i?HGAP:0)+stW(c.id),0);let cx=x+(sw-rowW)/2;
+      row.forEach(c=>{place(c.id,cx,d+1+yOff);cx+=stW(c.id)+HGAP});
+      yOff+=Math.max(...row.map(c=>stH(c.id)))})}
+  // Place each root tree side by side
+  let gx=0;roots.forEach(root=>{place(root.id,gx,0);gx+=stW(root.id)+GX*4});
+  // Normalize to origin
   let mx=Infinity,my=Infinity;Object.values(pos).forEach(p=>{mx=Math.min(mx,p.x);my=Math.min(my,p.y)});Object.values(pos).forEach(p=>{p.x-=mx-100;p.y-=my-80});return pos}
 const REL_LABELS=["Anak","Cucu","Cicit","Canggah","Wareng"];
 function getConns(pp,pos,marriages=[]){const L=[];const drawnSp=new Set();
@@ -189,9 +325,7 @@ function getConns(pp,pos,marriages=[]){const L=[];const drawnSp=new Set();
   pp.forEach(p=>{const ps=pos[p.id];if(!ps)return;
     const sps=FE.spouses(pp,p,marriages);
     sps.forEach(sp=>{if(!pos[sp.id])return;const k=[p.id,sp.id].sort().join("_");if(drawnSp.has(k))return;drawnSp.add(k);
-      const mar=marriages.find(m=>(m.husbandId===p.id&&m.wifeId===sp.id)||(m.husbandId===sp.id&&m.wifeId===p.id));
-      const ord=mar?mar.order:1;const lbl=ord>1?`NIKAH #${ord}`:"NIKAH";
-      L.push({t:"sp",x1:Math.min(ps.x,pos[sp.id].x)+CW,y1:ps.y+CH/2,x2:Math.max(ps.x,pos[sp.id].x),y2:pos[sp.id].y+CH/2,label:lbl,order:ord})});
+      L.push({t:"sp",x1:Math.min(ps.x,pos[sp.id].x)+CW,y1:ps.y+CH/2,x2:Math.max(ps.x,pos[sp.id].x),y2:pos[sp.id].y+CH/2})});
     // Parent→child connectors
     const ch=FE.ch(pp,p.id);if(ch.length){const pg=FE.gen(pp,p.id);
       const allSps=sps.filter(s=>pos[s.id]);const rightmost=allSps.length?Math.max(ps.x,...allSps.map(s=>pos[s.id].x))+CW:ps.x+CW;
@@ -310,31 +444,42 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 /* ── CANVAS ── */
 .cvs{width:100%;height:100%;position:relative;overflow:hidden;background:var(--bg0);cursor:grab;touch-action:none;background-image:radial-gradient(circle at 1px 1px,var(--bdr) .5px,transparent 0);background-size:32px 32px}.cvs.grabbing{cursor:grabbing}
 .cvs-inner{position:absolute;top:0;left:0;transform-origin:0 0}
-.gl{position:absolute;left:0;right:0;pointer-events:none;z-index:1}
-.gl-strip{position:absolute;left:0;top:0;bottom:0;width:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;z-index:2;padding:6px 2px;background:linear-gradient(90deg,var(--bg0) 50%,transparent);backdrop-filter:blur(4px)}
-.gl-emoji{font-size:18px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}.gl-title{font-size:7px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;text-align:center;max-width:48px;line-height:1.2}.gl-num{font-size:6px;opacity:.4;font-family:var(--f-mono)}
-.gl-bg{position:absolute;left:0;right:0;top:0;bottom:0;opacity:.025;border-top:1.5px dashed;border-bottom:1.5px dashed}
 /* Cards - glassmorphism */
-.cc{position:absolute;width:150px;min-height:80px;background:var(--bg2);border:1.5px solid var(--bdr);border-radius:10px;cursor:grab;user-select:none;transition:all .25s cubic-bezier(.4,0,.2,1);overflow:hidden;z-index:10;backdrop-filter:blur(8px)}
-.cc::before{content:'';position:absolute;inset:0;border-radius:10px;opacity:0;transition:opacity .25s;z-index:-1}
-.cc.male::before{background:radial-gradient(ellipse at 30% 0%,rgba(56,189,248,.06),transparent 70%)}.cc.female::before{background:radial-gradient(ellipse at 30% 0%,rgba(217,70,239,.06),transparent 70%)}
-.cc:hover{z-index:20;transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.35),0 0 0 1px var(--bdr2)}.cc:hover::before{opacity:1}
-.cc.dragging{z-index:50;box-shadow:0 16px 48px rgba(0,0,0,.5);opacity:.9;cursor:grabbing;transform:scale(1.03)}
-.cc.selected{border-color:var(--pri);box-shadow:0 0 24px rgba(20,184,166,.15),0 0 0 2px rgba(20,184,166,.2)}
-.cc.male{border-color:var(--male-bdr)}.cc.female{border-color:var(--fem-bdr)}
-.cc-bar{height:3px;width:100%}.cc.male .cc-bar{background:linear-gradient(90deg,var(--male-t),var(--acc),transparent)}.cc.female .cc-bar{background:linear-gradient(90deg,var(--fem-t),var(--rose),transparent)}
-.cc-body{padding:8px 10px;display:flex;align-items:center;gap:9px}
-.cc-av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;font-family:var(--f-display);flex-shrink:0;position:relative}
-.cc-av.male{background:linear-gradient(135deg,var(--male-bg),#162a48);color:var(--male-t);border:2px solid var(--male-bdr);box-shadow:0 2px 8px rgba(56,189,248,.12)}
-.cc-av.female{background:linear-gradient(135deg,var(--fem-bg),#2e1640);color:var(--fem-t);border:2px solid var(--fem-bdr);box-shadow:0 2px 8px rgba(217,70,239,.12)}
+.cc{position:absolute;width:${CW}px;min-height:${CH}px;background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;cursor:grab;user-select:none;transition:transform .15s,box-shadow .2s,border-color .2s;overflow:visible;z-index:10;display:flex;flex-direction:column;align-items:center;padding-top:14px;backdrop-filter:blur(8px)}
+.cc:hover{z-index:20;border-color:var(--bdr2);box-shadow:0 4px 16px rgba(0,0,0,.35);transform:translateY(-1px)}
+.cc.dragging{z-index:50;box-shadow:0 8px 28px rgba(0,0,0,.5);opacity:.92;cursor:grabbing;transform:scale(1.02)}
+.cc.selected{border-color:var(--pri);box-shadow:0 0 0 2px rgba(20,184,166,.18),0 4px 16px rgba(0,0,0,.35)}
+.cc.male{border-top:${ACCENT_H}px solid var(--male-t)}.cc.female{border-top:${ACCENT_H}px solid var(--fem-t)}
+.cc.deceased{opacity:.62}.cc.deceased::after{content:'almh.';position:absolute;bottom:6px;right:8px;font-size:8px;font-family:var(--f-mono);color:var(--t3);font-weight:500;letter-spacing:.4px;pointer-events:none}
+.cc-av{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;font-family:var(--f-display);flex-shrink:0;background:var(--bg1);margin-bottom:8px;position:relative}
+.cc-av.male{color:var(--male-t);border:1.5px solid var(--male-bdr)}
+.cc-av.female{color:var(--fem-t);border:1.5px solid var(--fem-bdr)}
 .cc-status{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg2)}
-.cc-info{min-width:0;flex:1}.cc-name{font-size:11px;font-weight:600;line-height:1.25;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.cc-meta{font-size:8px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.2px}.cc-gen{position:absolute;top:0;right:0;width:18px;height:18px;border-radius:0 10px 0 8px;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#000;font-family:var(--f-mono)}
+.cc-nm{font-size:13px;font-weight:500;line-height:1.25;text-align:center;padding:0 10px;max-width:100%;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cc-mt{font-size:11px;color:var(--t3);margin-top:4px;text-align:center;font-family:var(--f-mono);letter-spacing:.2px}
+.cc-badge-gen{position:absolute;top:6px;left:6px;font-size:9px;font-family:var(--f-mono);font-weight:600;padding:2px 6px;border-radius:8px;background:var(--bg1);color:var(--t3);letter-spacing:.3px;z-index:2}
+.cc-badge-nik{position:absolute;top:6px;right:6px;font-size:8px;font-family:var(--f-mono);font-weight:600;padding:2px 5px;border-radius:8px;background:rgba(20,184,166,.12);color:var(--pri);letter-spacing:.4px;z-index:2}
 /* Expand/collapse toggle */
 .cc-toggle{position:absolute;bottom:-12px;left:50%;transform:translateX(-50%);width:24px;height:16px;border-radius:0 0 8px 8px;border:1px solid var(--bdr);border-top:none;background:var(--bg1);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:15;font-size:8px;font-weight:700;font-family:var(--f-mono);color:var(--pri);transition:all .15s;pointer-events:auto}
 .cc-toggle:hover{background:var(--pri);color:#000;transform:translateX(-50%) scale(1.1)}
+.cc-branch{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);font-size:7px;color:var(--pri);background:var(--bg2);border:1px dashed var(--pri);border-radius:8px;padding:2px 8px;cursor:pointer;white-space:nowrap;opacity:.7;transition:all .2s;z-index:15;pointer-events:auto}
+.cc-branch:hover{opacity:1;background:rgba(20,184,166,.12);border-style:solid}
+/* POV bar */
+.pov-bar{position:absolute;top:0;left:0;right:0;z-index:60;display:flex;align-items:center;justify-content:space-between;padding:4px 12px;background:var(--bg1);border-bottom:1px solid var(--bdr);font-size:10px;gap:8px;backdrop-filter:blur(8px);min-height:28px}
+.pov-left{display:flex;align-items:center;gap:2px;overflow:hidden;flex:1;min-width:0}
+.pov-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.pov-crumb{background:none;border:none;color:var(--pri);cursor:pointer;font-size:10px;font-family:var(--f-body);padding:2px 4px;border-radius:3px}
+.pov-crumb:hover{background:var(--bg3);text-decoration:underline}
+.pov-sep{color:var(--t3);margin:0 1px}
+.pov-current{font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pov-count{color:var(--t3);font-family:var(--f-mono);font-size:9px;margin-left:6px;white-space:nowrap}
+.pov-show-all{background:none;border:1px solid var(--bdr);border-radius:4px;color:var(--pri);cursor:pointer;font-size:9px;padding:2px 8px;font-family:var(--f-body)}
+.pov-show-all:hover{background:var(--bg3)}
+.pov-sel{padding:2px 6px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;color:var(--t1);font-size:9px;font-family:var(--f-body);max-width:120px}
+.pov-toggle{padding:2px 8px;border-radius:4px;border:1px solid var(--bdr);background:var(--bg2);color:var(--t2);cursor:pointer;font-size:9px;font-weight:600;font-family:var(--f-mono)}
+.pov-toggle.on{background:var(--pri);color:#000;border-color:var(--pri)}
 /* Search overlay on canvas */
-.cvs-search{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:70;width:280px;max-width:calc(100vw - 120px)}
+.cvs-search{position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:70;width:280px;max-width:calc(100vw - 120px)}
 .cvs-search-input{width:100%;padding:8px 12px 8px 32px;background:var(--bg1);border:1px solid var(--bdr);border-radius:20px;color:var(--t1);font-size:12px;font-family:var(--f-body);outline:none;backdrop-filter:blur(8px);box-shadow:0 4px 16px rgba(0,0,0,.3);transition:border .2s}
 .cvs-search-input:focus{border-color:var(--pri);box-shadow:0 4px 16px rgba(0,0,0,.3),0 0 0 2px rgba(20,184,166,.15)}
 .cvs-search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--t3);pointer-events:none}
@@ -464,7 +609,6 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
 [data-theme="light"] .auth-hero::before{background:radial-gradient(circle,rgba(13,148,136,.06) 0%,transparent 70%)}
 [data-theme="light"] .auth-hero::after{background:radial-gradient(circle,rgba(79,70,229,.04) 0%,transparent 70%)}
 [data-theme="light"] .cvs{background-image:radial-gradient(circle at 1px 1px,var(--bdr) .5px,transparent 0)}
-[data-theme="light"] .gl-strip{background:linear-gradient(90deg,var(--bg0) 50%,transparent)}
 [data-theme="light"] .cc{box-shadow:0 2px 8px rgba(0,0,0,.08);backdrop-filter:none;background:var(--bg1)}
 [data-theme="light"] .cc:hover{box-shadow:0 8px 24px rgba(0,0,0,.12);transform:translateY(-3px)}
 [data-theme="light"] .cc.male::before{background:radial-gradient(ellipse at 30% 0%,rgba(3,105,161,.06),transparent 70%)}
@@ -681,6 +825,54 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
   .sg{grid-template-columns:1fr}
   .admin-stats{grid-template-columns:1fr}
 }
+/* ── MILESTONE MODAL ── */
+.ms-ov{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:210;padding:16px}
+.ms-card{background:var(--bg1);border:1px solid var(--bdr);border-radius:16px;width:100%;max-width:400px;padding:28px 24px;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.5);animation:msPop .3s ease}
+@keyframes msPop{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+.ms-emoji{font-size:48px;margin-bottom:12px}
+.ms-title{font-family:var(--f-display);font-size:20px;margin-bottom:6px}
+.ms-desc{font-size:13px;color:var(--t3);line-height:1.6;margin-bottom:20px}
+.ms-btns{display:flex;flex-direction:column;gap:8px}
+.ms-btn-p{padding:10px 16px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--pri),var(--acc));color:#000;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--f-body);transition:all .2s}
+.ms-btn-p:hover{opacity:.9;transform:translateY(-1px)}
+.ms-btn-s{padding:8px 14px;border-radius:8px;border:1px solid var(--bdr);background:transparent;color:var(--t2);font-size:12px;cursor:pointer;font-family:var(--f-body);transition:all .2s}
+.ms-btn-s:hover{background:var(--bg2);border-color:var(--bdr2)}
+/* ── ONBOARDING WIZARD ── */
+.wiz-ov{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:250;padding:16px}
+.wiz{background:var(--bg1);border:1px solid var(--bdr);border-radius:16px;width:100%;max-width:440px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.5);animation:mUp .25s ease}
+.wiz-prog{display:flex;gap:4px;padding:16px 20px 0}
+.wiz-dot{flex:1;height:4px;border-radius:4px;background:var(--bdr);transition:background .3s}
+.wiz-dot.on{background:var(--pri)}
+.wiz-dot.done{background:var(--pri);opacity:.5}
+.wiz-step{padding:20px;min-height:240px;position:relative;overflow:hidden}
+.wiz-title{font-family:var(--f-display);font-size:20px;margin-bottom:4px}
+.wiz-sub{font-size:12px;color:var(--t3);margin-bottom:20px}
+.wiz-opt{display:flex;gap:8px;margin-bottom:14px}
+.wiz-opt-btn{flex:1;padding:12px;border-radius:10px;border:2px solid var(--bdr);background:var(--bg2);color:var(--t1);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:var(--f-body);text-align:center}
+.wiz-opt-btn:hover{border-color:var(--bdr2);background:var(--bg3)}
+.wiz-opt-btn.on{border-color:var(--pri);background:rgba(20,184,166,.08);color:var(--pri)}
+.wiz-ftr{padding:12px 20px;border-top:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center}
+.wiz-skip{font-size:11px;color:var(--t3);background:none;border:none;cursor:pointer;font-family:var(--f-body);padding:4px 8px}
+.wiz-skip:hover{color:var(--t2);text-decoration:underline}
+/* ── CANVAS CARD ACTIONS (+ button) ── */
+.cc-add{position:absolute;top:4px;right:20px;width:24px;height:24px;border-radius:50%;background:var(--pri);color:#000;border:none;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:16;opacity:0;transition:all .2s;box-shadow:0 2px 8px rgba(20,184,166,.3);line-height:1;padding:0}
+.cc:hover .cc-add,.cc-add:focus{opacity:1}
+.cc-add:hover{transform:scale(1.15);box-shadow:0 3px 12px rgba(20,184,166,.5)}
+.cc-menu{position:absolute;top:0;right:28px;z-index:100;display:flex;flex-direction:column;gap:4px;background:var(--bg1);border:1px solid var(--bdr);border-radius:10px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.4);animation:mUp .15s ease;min-width:130px}
+.cc-menu-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;border:none;background:transparent;color:var(--t1);cursor:pointer;font-size:11px;font-family:var(--f-body);transition:all .15s;white-space:nowrap}
+.cc-menu-item:hover{background:var(--bg3)}
+.cc-menu-item:disabled{opacity:.35;cursor:not-allowed}
+.cc-menu-item:disabled:hover{background:transparent}
+.cc-menu-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;border:1.5px solid var(--bdr)}
+/* ── BOTTOM NAV BAR (Mobile) ── */
+.bnav{position:fixed;bottom:0;left:0;right:0;z-index:95;display:flex;align-items:stretch;justify-content:space-around;background:var(--bg1);border-top:1px solid var(--bdr);border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.3);backdrop-filter:blur(12px);padding:4px 0 max(8px,env(safe-area-inset-bottom));transition:transform .25s ease}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 0;cursor:pointer;border:none;background:transparent;color:var(--t3);font-size:9px;font-family:var(--f-body);font-weight:500;position:relative;transition:color .15s}
+.bnav-item.on{color:var(--pri);font-weight:700}
+.bnav-item.on::before{content:'';position:absolute;top:0;left:25%;right:25%;height:2.5px;background:var(--pri);border-radius:0 0 4px 4px}
+.bnav-icon{font-size:18px;line-height:1;transition:transform .2s}
+.bnav-item.on .bnav-icon{transform:translateY(-1px) scale(1.1)}
+/* Hide top nav on mobile when bnav active */
+@media(max-width:768px){.ws-hdr .nav{display:none!important}.ws-body-bnav{padding-bottom:72px!important}}
 /* ── Touch / safe areas ── */
 @supports(padding:env(safe-area-inset-bottom)){
   .ws-hdr{padding-left:max(8px,env(safe-area-inset-left));padding-right:max(8px,env(safe-area-inset-right))}
@@ -701,6 +893,24 @@ body,#root{font-family:var(--f-body);background:var(--bg0);color:var(--t1);min-h
   .modal{max-height:90vh;border-radius:10px}
   .sb{width:260px}
 }
+/* Event cards */
+.evt-card{min-width:140px;background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;padding:12px;cursor:pointer;transition:all .2s;flex-shrink:0;text-align:center}
+.evt-card:hover{border-color:var(--pri);transform:translateY(-2px)}
+/* Feed */
+.feed-post{background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;padding:14px;margin-bottom:10px}
+.feed-post.auto{border-style:dashed;opacity:.7;background:transparent}
+/* Chat widget */
+.chat-fab{position:fixed;bottom:20px;right:20px;width:48px;height:48px;border-radius:50%;background:var(--pri);color:#000;border:none;font-size:20px;cursor:pointer;box-shadow:0 4px 16px rgba(20,184,166,.4);z-index:90;transition:transform .2s}
+.chat-fab:hover{transform:scale(1.1)}
+.chat-panel{position:fixed;bottom:80px;right:20px;width:340px;max-width:calc(100vw - 40px);height:420px;max-height:60vh;background:var(--bg1);border:1px solid var(--bdr);border-radius:12px;z-index:90;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.chat-hdr{padding:10px 14px;border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center;font-size:12px}
+.chat-body{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.chat-msg{display:flex}.chat-msg.user{justify-content:flex-end}.chat-msg.ai{justify-content:flex-start}
+.chat-bubble{max-width:85%;padding:8px 12px;border-radius:12px;font-size:11px;line-height:1.6;white-space:pre-wrap}
+.chat-msg.user .chat-bubble{background:var(--pri);color:#000;border-bottom-right-radius:4px}
+.chat-msg.ai .chat-bubble{background:var(--bg2);color:var(--t1);border-bottom-left-radius:4px}
+.chat-input{padding:8px;border-top:1px solid var(--bdr);display:flex;gap:6px}
+.chat-input input{flex:1;padding:8px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;color:var(--t1);font-size:11px;outline:none;font-family:var(--f-body)}
 `;
 
 // ─── ICONS ───────────────────────────────────────────────────
@@ -780,18 +990,30 @@ function AuthScreen({onLogin}){
 // ADMIN PANEL
 // ═══════════════════════════════════════════════════════════════
 function AdminPanel({user,onBack,onSelectFamily}){
-  const[tab,setTab]=useState("stats");const[stats,setStats]=useState(null);const[users,setUsers]=useState([]);const[families,setFamilies]=useState([]);const[loading,setLoading]=useState(true);
-  const load=async()=>{setLoading(true);try{if(tab==="stats"){const d=await API.adminStats();setStats(d.stats)}else if(tab==="users"){setUsers(await API.adminUsers())}else{setFamilies(await API.adminFamilies())}}catch{}setLoading(false)};
+  const[tab,setTab]=useState("stats");const[stats,setStats]=useState(null);const[users,setUsers]=useState([]);const[families,setFamilies]=useState([]);const[auditLogs,setAuditLogs]=useState([]);const[loading,setLoading]=useState(true);
+  const[famFilter,setFamFilter]=useState("all");
+  const load=async()=>{setLoading(true);try{if(tab==="stats"){const d=await API.adminStats();setStats(d.stats)}else if(tab==="users"){setUsers(await API.adminUsers())}else if(tab==="audit"){try{setAuditLogs(await API.adminAudit({limit:100}))}catch{setAuditLogs([])}}else{setFamilies(await API.adminFamilies())}}catch{}setLoading(false)};
   useEffect(()=>{load()},[tab]);
   const changeRole=async(uid,role)=>{try{await API.setUserRole(uid,role);load()}catch(e){alert(e.message)}};
   const delUser=async uid=>{if(!confirm("Hapus user ini?"))return;try{await API.deleteUser(uid);load()}catch(e){alert(e.message)}};
   const isSA=user.role==="super_admin";
+  const sevBadge=sev=>{const c={info:"var(--acc)",warning:"var(--warn)",error:"var(--rose)",critical:"#ef4444"};return{background:(c[sev]||c.info)+"22",color:c[sev]||c.info,padding:"2px 6px",borderRadius:4,fontSize:9,fontWeight:600,fontFamily:"var(--f-mono)"}};
   return(<div className="dash"><header className="dash-hdr"><h1>NAS<em>AB</em></h1><div className="dash-user"><span className="admin-badge">{user.role==="super_admin"?"SUPER ADMIN":"ADMIN"}</span><b>{user.name}</b><ThemeBtn/><button className="btn btn-sm btn-ghost" onClick={onBack}><Ic.Back/> Dashboard</button></div></header>
-    <div className="admin-panel"><div className="admin-tabs">{[{id:"stats",l:"Statistik"},{id:"users",l:"Users"},{id:"families",l:"Families"}].map(t=><button key={t.id} className={`admin-tab ${tab===t.id?"on":""}`} onClick={()=>setTab(t.id)}>{t.l}</button>)}</div>
+    <div className="admin-panel"><div className="admin-tabs">{[{id:"stats",l:"Statistik"},{id:"users",l:"Users"},{id:"families",l:"Families"},{id:"audit",l:"Audit Log"}].map(t=><button key={t.id} className={`admin-tab ${tab===t.id?"on":""}`} onClick={()=>setTab(t.id)}>{t.l}</button>)}</div>
     {loading?<div style={{textAlign:"center",padding:40,color:"var(--t3)"}}>Loading...</div>:
     tab==="stats"&&stats?<div className="admin-stats">{[{l:"Total Users",v:stats.totalUsers,c:"var(--acc)"},{l:"Total Families",v:stats.totalFamilies,c:"var(--pri)"},{l:"Total Members",v:stats.totalMembers,c:"var(--warn)"},{l:"Total Stories",v:stats.totalStories,c:"var(--orange)"}].map((s,i)=><div key={i} className="admin-stat"><h4>{s.l}</h4><div className="admin-val" style={{color:s.c}}>{s.v}</div></div>)}</div>:
     tab==="users"?<table className="admin-table"><thead><tr><th>Nama</th><th>Email</th><th>Role</th><th>Families</th><th>Joined</th>{isSA&&<th>Aksi</th>}</tr></thead><tbody>{users.map(u=><tr key={u.id}><td style={{fontWeight:600}}>{u.name}</td><td style={{color:"var(--t3)"}}>{u.email}</td><td>{u.id===user.id?<span className={`role-badge role-${u.role}`}>{u.role}</span>:<select className="fsel" value={u.role} onChange={e=>changeRole(u.id,e.target.value)} style={{fontSize:11,padding:"2px 6px"}}><option value="user">user</option>{isSA&&<option value="admin">admin</option>}{isSA&&<option value="super_admin">super_admin</option>}</select>}</td><td>{u.familyCount}</td><td style={{fontSize:10,color:"var(--t3)"}}>{u.created_at?new Date(u.created_at).toLocaleDateString("id-ID"):"-"}</td>{isSA&&<td>{u.id!==user.id&&<button className="btn btn-d btn-sm" onClick={()=>delUser(u.id)} style={{fontSize:9,padding:"2px 8px"}}>Hapus</button>}</td>}</tr>)}</tbody></table>:
-    tab==="families"?<table className="admin-table"><thead><tr><th>Nama</th><th>Owner</th><th>Members</th><th>Collaborators</th><th>Created</th><th>Aksi</th></tr></thead><tbody>{families.map(f=><tr key={f.id}><td style={{fontWeight:600}}>{f.name}</td><td>{f.owner_name}</td><td>{f.memberCount}</td><td>{f.collabCount}</td><td style={{fontSize:10,color:"var(--t3)"}}>{f.created_at?new Date(f.created_at).toLocaleDateString("id-ID"):"-"}</td><td><button className="btn btn-sm" onClick={async()=>{try{const full=await API.getFamily(f.id);onSelectFamily(full)}catch(e){alert(e.message)}}} style={{fontSize:9,padding:"2px 8px"}}>Buka</button></td></tr>)}</tbody></table>:null}
+    tab==="families"?(()=>{const isStale=f=>f.memberCount===0&&f.created_at&&(Date.now()-new Date(f.created_at).getTime())>7*864e5;
+      const cActive=families.filter(f=>f.memberCount>0).length;const cEmpty=families.filter(f=>f.memberCount===0).length;const cStale=families.filter(isStale).length;
+      const filtered=famFilter==="active"?families.filter(f=>f.memberCount>0):famFilter==="empty"?families.filter(f=>f.memberCount===0):famFilter==="stale"?families.filter(isStale):families;
+      return<div>
+        <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:12,flexWrap:"wrap"}}>
+          <select className="fsel" value={famFilter} onChange={e=>setFamFilter(e.target.value)} style={{fontSize:11,padding:"4px 8px",width:"auto"}}><option value="all">Semua</option><option value="active">Aktif (&gt;0)</option><option value="empty">Kosong (0)</option><option value="stale">Stale (&gt;7 hari)</option></select>
+          {isSA&&<button className="btn btn-d btn-sm" disabled title="Perlu endpoint API baru" style={{opacity:.5,fontSize:10}}>🗑 Bersihkan Family Kosong</button>}
+        </div>
+        <div style={{fontSize:11,color:"var(--t3)",marginBottom:10,fontFamily:"var(--f-mono)"}}>{families.length} total · <span style={{color:"var(--pri)"}}>{cActive} aktif</span> · <span style={{color:"var(--warn)"}}>{cEmpty} kosong</span> · <span style={{color:"var(--rose)"}}>{cStale} stale</span></div>
+        <table className="admin-table"><thead><tr><th>Nama</th><th>Owner</th><th>Members</th><th>Collaborators</th><th>Created</th><th>Aksi</th></tr></thead><tbody>{filtered.map(f=><tr key={f.id}><td style={{fontWeight:600}}>{f.name}</td><td>{f.owner_name}</td><td>{f.memberCount}{f.memberCount===0&&<span style={{marginLeft:6,padding:"1px 6px",borderRadius:4,fontSize:8,fontWeight:700,fontFamily:"var(--f-mono)",background:isStale(f)?"var(--warn)22":"#ef444422",color:isStale(f)?"var(--warn)":"#ef4444"}}>{isStale(f)?"Stale":"Kosong"}</span>}</td><td>{f.collabCount}</td><td style={{fontSize:10,color:"var(--t3)"}}>{f.created_at?new Date(f.created_at).toLocaleDateString("id-ID"):"-"}</td><td><button className="btn btn-sm" onClick={async()=>{try{const full=await API.getFamily(f.id);onSelectFamily(full)}catch(e){alert(e.message)}}} style={{fontSize:9,padding:"2px 8px"}}>Buka</button></td></tr>)}</tbody></table></div>})():
+    tab==="audit"?<div>{auditLogs.length?<table className="admin-table"><thead><tr><th>Waktu</th><th>User</th><th>Aksi</th><th>Entity</th><th>Severity</th><th>Detail</th></tr></thead><tbody>{auditLogs.map((l,i)=><tr key={i}><td style={{fontSize:9,fontFamily:"var(--f-mono)",color:"var(--t3)",whiteSpace:"nowrap"}}>{l.created_at?new Date(l.created_at).toLocaleString("id-ID"):"-"}</td><td style={{fontSize:10}}>{l.user_name||l.user_id||"-"}</td><td style={{fontSize:10,fontWeight:600}}>{l.action}</td><td style={{fontSize:9,color:"var(--t3)"}}>{l.entity_type} {l.entity_id?`#${l.entity_id.slice(0,8)}`:""}</td><td><span style={sevBadge(l.severity||"info")}>{l.severity||"info"}</span></td><td style={{fontSize:9,color:"var(--t3)",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.details||"-"}</td></tr>)}</tbody></table>:<div style={{textAlign:"center",padding:40,color:"var(--t3)",fontSize:12}}>Belum ada audit log</div>}</div>:null}
     </div></div>);
 }
 
@@ -820,6 +1042,71 @@ function Dashboard({user,onSelectFamily,onLogout,onCreateFamily,onAdmin}){
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ONBOARDING WIZARD
+// ═══════════════════════════════════════════════════════════════
+function OnboardingWizard({fam,onDone,onSkip}){
+  const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);
+  const[name,setName]=useState("");const[gender,setGender]=useState("male");
+  const[married,setMarried]=useState(null);const[spName,setSpName]=useState("");
+  const[addParents,setAddParents]=useState(null);const[fatherName,setFatherName]=useState("");const[motherName,setMotherName]=useState("");
+  const spGender=gender==="male"?"female":"male";
+  const submit=async()=>{if(!name.trim()||busy)return;setBusy(true);let count=0;
+    try{
+      // 1. Create self
+      const self=await API.addMember(fam.id,{name:name.trim(),gender,birth_date:"",death_date:"",birth_place:"",notes:"",parent_id:null,spouse_id:null,nik:"",agama:"islam"});
+      const selfId=self?.member?.id;count++;
+      // 2. Create spouse if married
+      let spId=null;
+      if(married&&spName.trim()){const sp=await API.addMember(fam.id,{name:spName.trim(),gender:spGender,birth_date:"",death_date:"",birth_place:"",notes:"",parent_id:null,spouse_id:selfId||null,nik:"",agama:"islam"});
+        spId=sp?.member?.id;count++;
+        // Create marriage
+        if(selfId&&spId){const hId=gender==="male"?selfId:spId;const wId=gender==="male"?spId:selfId;
+          try{await API.addMarriage(fam.id,{husband_id:hId,wife_id:wId,marriage_order:1})}catch{}}
+        // Link spouse_id on self
+        if(spId)try{await API.updateMember(fam.id,selfId,{name:name.trim(),gender,birth_date:"",death_date:"",birth_place:"",notes:"",parent_id:null,spouse_id:spId,nik:"",agama:"islam"})}catch{}}
+      // 3. Create parents if requested
+      if(addParents&&(fatherName.trim()||motherName.trim())){
+        let fatherId=null,motherId=null;
+        if(fatherName.trim()){const f=await API.addMember(fam.id,{name:fatherName.trim(),gender:"male",birth_date:"",death_date:"",birth_place:"",notes:"",parent_id:null,spouse_id:null,nik:"",agama:"islam"});
+          fatherId=f?.member?.id;count++}
+        if(motherName.trim()){const m=await API.addMember(fam.id,{name:motherName.trim(),gender:"female",birth_date:"",death_date:"",birth_place:"",notes:"",parent_id:null,spouse_id:fatherId||null,nik:"",agama:"islam"});
+          motherId=m?.member?.id;count++;
+          // Link father-mother spouse
+          if(fatherId)try{await API.updateMember(fam.id,fatherId,{name:fatherName.trim(),gender:"male",birth_date:"",death_date:"",birth_place:"",notes:"",parent_id:null,spouse_id:motherId,nik:"",agama:"islam"})}catch{}
+          // Marriage
+          if(fatherId&&motherId)try{await API.addMarriage(fam.id,{husband_id:fatherId,wife_id:motherId,marriage_order:1})}catch{}}
+        // Set self's parent_id to father (or mother if no father)
+        const parentId=fatherId||motherId;
+        if(parentId&&selfId)try{await API.updateMember(fam.id,selfId,{name:name.trim(),gender,birth_date:"",death_date:"",birth_place:"",notes:"",parent_id:parentId,spouse_id:spId||null,nik:"",agama:"islam"})}catch{}}
+      onDone(count);
+    }catch(e){onDone(count,e.message)}finally{setBusy(false)}};
+  return(<div className="wiz-ov"><div className="wiz">
+    <div className="wiz-prog">{[0,1,2].map(i=><div key={i} className={`wiz-dot${i===step?" on":i<step?" done":""}`}/>)}</div>
+    <div className="wiz-step">
+      {step===0&&<><div className="wiz-title">Mulai dari Kamu</div><div className="wiz-sub">Siapa yang akan jadi titik awal pohon keluarga?</div>
+        <div className="fg"><label className="fl">Nama Lengkap *</label><input className="fi" value={name} onChange={e=>setName(e.target.value)} placeholder="Nama lengkap kamu" autoFocus/></div>
+        <div className="fg"><label className="fl">Jenis Kelamin</label><div className="gtog"><button className={`gbtn ${gender==="male"?"am":""}`} onClick={()=>setGender("male")}>♂ Laki-laki</button><button className={`gbtn ${gender==="female"?"af":""}`} onClick={()=>setGender("female")}>♀ Perempuan</button></div></div></>}
+      {step===1&&<><div className="wiz-title">Pasangan Hidup</div><div className="wiz-sub">Apakah kamu sudah menikah?</div>
+        <div className="wiz-opt"><button className={`wiz-opt-btn${married===true?" on":""}`} onClick={()=>setMarried(true)}>💍 Sudah Menikah</button><button className={`wiz-opt-btn${married===false?" on":""}`} onClick={()=>setMarried(false)}>Lewati</button></div>
+        {married&&<div className="fg"><label className="fl">Nama Pasangan</label><input className="fi" value={spName} onChange={e=>setSpName(e.target.value)} placeholder={`Nama ${spGender==="male"?"suami":"istri"}`} autoFocus/></div>}</>}
+      {step===2&&<><div className="wiz-title">Orang Tua</div><div className="wiz-sub">Tambahkan nama orang tua (bisa dilengkapi nanti)</div>
+        <div className="wiz-opt"><button className={`wiz-opt-btn${addParents===true?" on":""}`} onClick={()=>setAddParents(true)}>👨‍👩‍👧 Tambah Ortu</button><button className={`wiz-opt-btn${addParents===false?" on":""}`} onClick={()=>setAddParents(false)}>Nanti Saja</button></div>
+        {addParents&&<><div className="fg"><label className="fl">Nama Ayah</label><input className="fi" value={fatherName} onChange={e=>setFatherName(e.target.value)} placeholder="Nama ayah" autoFocus/></div>
+        <div className="fg"><label className="fl">Nama Ibu</label><input className="fi" value={motherName} onChange={e=>setMotherName(e.target.value)} placeholder="Nama ibu"/></div></>}
+        {addParents===false&&<div style={{textAlign:"center",padding:"16px 0",color:"var(--t3)",fontSize:12}}>Bisa ditambahkan nanti dari Canvas 🌳</div>}</>}
+    </div>
+    <div className="wiz-ftr">
+      <button className="wiz-skip" onClick={onSkip}>Lewati wizard</button>
+      <div style={{display:"flex",gap:6}}>
+        {step>0&&<button className="btn btn-sm" onClick={()=>setStep(s=>s-1)}>← Kembali</button>}
+        {step<2&&<button className="btn btn-p btn-sm" onClick={()=>setStep(s=>s+1)} disabled={step===0&&!name.trim()}>Lanjut →</button>}
+        {step===2&&<button className="btn btn-p btn-sm" onClick={submit} disabled={!name.trim()||busy}>{busy?"Menyimpan...":"🌳 Mulai Pohon Keluarga"}</button>}
+      </div>
+    </div>
+  </div></div>);
+}
+
+// ═══════════════════════════════════════════════════════════════
 // WORKSPACE — All views
 // ═══════════════════════════════════════════════════════════════
 function Workspace({family:initFam,user,onBack}){
@@ -827,11 +1114,46 @@ function Workspace({family:initFam,user,onBack}){
   const [vw,setVw]=useState(VW.CANVAS);const [search,setSearch]=useState("");const [sel,setSel]=useState(null);
   const [showForm,setShowForm]=useState(false);const [editP,setEditP]=useState(null);const [showShare,setShowShare]=useState(false);
   const [showIE,setShowIE]=useState(false);const [showFar,setShowFar]=useState(false);const [showMar,setShowMar]=useState(false);const [showKK,setShowKK]=useState(false);const [toast,setToast]=useState(null);const [filters,setFilters]=useState({});
+  const[showDQ,setShowDQ]=useState(false);const[showChat,setShowChat]=useState(false);
+  // Onboarding wizard — show when family has 0 members on first load
+  const[showWizard,setShowWizard]=useState(false);const wizardChecked=useRef(false);
+  // Milestone modal
+  const[milestone,setMilestone]=useState(null);
   const myRole=(fam.collaborators||[]).find(c=>c.userId===user.id)?.role||RL.VIEWER;const canEdit=myRole===RL.OWNER||myRole===RL.EDITOR;
+  // Mobile detection for BottomNavBar
+  const[isMobile,setIsMobile]=useState(()=>window.innerWidth<=768);
+  useEffect(()=>{const mq=window.matchMedia('(max-width:768px)');const h=e=>setIsMobile(e.matches);mq.addEventListener('change',h);return()=>mq.removeEventListener('change',h)},[]);
+  // POV tree navigation
+  const[povRootId,setPovRootId]=useState(null);const[povHistory,setPovHistory]=useState([]);const[povMode,setPovMode]=useState(true);
+  const autoRoot=useMemo(()=>{const roots=FE.roots(pp,mrs);if(!roots.length)return pp[0]?.id||null;
+    // Pick root with most total descendants (recursive, includes co-parented children).
+    // Direct-children count misleads when a patriarch has 1 child but many grandchildren.
+    const famLower=(fam?.name||"").toLowerCase();const firstName=p=>(p.name||"").toLowerCase().split(/\s+/)[0]||"";
+    return roots.reduce((best,r)=>{
+      const rD=FE.descAll(pp,r.id,mrs),bD=FE.descAll(pp,best.id,mrs);
+      if(rD!==bD)return rD>bD?r:best;
+      // Tiebreaker: prefer person whose first name appears in family name
+      const rIn=firstName(r)&&famLower.includes(firstName(r));const bIn=firstName(best)&&famLower.includes(firstName(best));
+      if(rIn&&!bIn)return r;if(bIn&&!rIn)return best;
+      return best;
+    }).id},[pp,mrs,fam?.name]);
+  const effectiveRoot=povRootId||autoRoot;
+  const povData=useMemo(()=>povMode&&effectiveRoot?getPOVMembers(pp,effectiveRoot,mrs):{visible:pp,branches:[]},[pp,effectiveRoot,mrs,povMode]);
+  const povPP=povData.visible;const povBranches=povData.branches;
+  const switchPov=(newRootId)=>{const cur=pp.find(p=>p.id===effectiveRoot);setPovHistory(prev=>[...prev,{rootId:effectiveRoot,label:cur?.name||"Root"}]);setPovRootId(newRootId)};
+  const povBack=(idx)=>{const h=povHistory[idx];setPovRootId(h.rootId);setPovHistory(prev=>prev.slice(0,idx))};
   const flash=m=>{setToast(m);setTimeout(()=>setToast(null),3000)};
   const reloadFam=async()=>{try{const d=await API.getFamily(fam.id);setFam(d);setPos(d.positions||{})}catch{}};
   useEffect(()=>{if(!initFam.members){(async()=>{try{const d=await API.getFamily(initFam.id);setFam(d);setPos(d.positions||{})}catch{}finally{setLoading(false)}})()}},[initFam.id]);
-  const handleSave=async(person,lsid,ltid)=>{if(!canEdit)return;try{if(lsid&&ltid){const sp=pp.find(x=>x.id===lsid);if(sp)await API.updateMember(fam.id,lsid,{...sp,spouseId:ltid});await reloadFam();return}if(!person)return;const ex=pp.find(x=>x.id===person.id);if(ex){await API.updateMember(fam.id,person.id,person);flash(`${person.name} diperbarui`)}else{await API.addMember(fam.id,person);flash(`${person.name} ditambahkan`)}await reloadFam()}catch(e){flash(e.message)}};
+  // Show wizard once after loading if 0 members
+  useEffect(()=>{if(!loading&&!wizardChecked.current){wizardChecked.current=true;if(pp.length===0)setShowWizard(true)}},[loading,pp.length]);
+  // Milestone triggers — one-time per family
+  useEffect(()=>{if(!fam?.id||!pp.length||showWizard)return;const fid=fam.id;
+    if(pp.length>=15&&!localStorage.getItem(`nasab-ms15-${fid}`)){setMilestone({type:'advanced',count:pp.length,familyName:fam.name});localStorage.setItem(`nasab-ms15-${fid}`,'1')}
+    else if(pp.length>=5&&!localStorage.getItem(`nasab-ms5-${fid}`)){setMilestone({type:'story',count:pp.length,familyName:fam.name});localStorage.setItem(`nasab-ms5-${fid}`,'1')}
+  },[pp.length,fam?.id,showWizard]);
+  const handleSave=async(person,lsid,ltid)=>{if(!canEdit)return;try{if(lsid&&ltid){const sp=pp.find(x=>x.id===lsid);if(sp)await API.updateMember(fam.id,lsid,{...sp,spouseId:ltid});await reloadFam();return}if(!person)return;const ex=pp.find(x=>x.id===person.id);if(ex){await API.updateMember(fam.id,person.id,person);flash(`${person.name} diperbarui`)}else{const res=await API.addMember(fam.id,person);const newId=res?.member?.id||person.id;// Handle "parent" quick add — set child's parentId to the new parent
+      if(person._quickType==='parent'&&person._refPersonId){const child=pp.find(x=>x.id===person._refPersonId);if(child)await API.updateMember(fam.id,child.id,{...child,parentId:newId})}flash(`${person.name} ditambahkan`)}await reloadFam()}catch(e){flash(e.message)}};
   const handleDel=async id=>{if(!canEdit)return;const p=pp.find(x=>x.id===id);if(FE.ch(pp,id).length){alert(`Tidak bisa hapus — ${p.name} masih punya anak.`);return}if(confirm(`Hapus ${p.name}?`)){try{await API.deleteMember(fam.id,id);setSel(null);flash(`${p.name} dihapus`);await reloadFam()}catch(e){flash(e.message)}}};
   const loadDemo=()=>{flash("Demo tidak tersedia dalam mode online")};
   const updPos=useCallback(async p=>{setPos(p);try{await API.savePositions(fam.id,p)}catch{}},[fam]);
@@ -843,7 +1165,7 @@ function Workspace({family:initFam,user,onBack}){
       <div className="ws-brand"><h1>NAS<em>AB</em></h1><span style={{color:"var(--t3)",fontSize:12,marginLeft:4}}>/</span><span style={{fontSize:12,fontWeight:600,marginLeft:4}}>{fam.name}</span></div>
       <span className="ws-tag">v{APP.version}</span>
       <nav className="nav">
-        {[{id:VW.CANVAS,l:"Canvas"},{id:VW.MAP,l:"Peta"},{id:VW.LIST,l:"Daftar"},{id:VW.STATS,l:"Stats"},{id:VW.TIMELINE,l:"Timeline"},{id:VW.INSIGHTS,l:"Insights"}].map(t=>(
+        {[{id:VW.CANVAS,l:"Canvas"},{id:VW.MAP,l:"Peta"},{id:VW.LIST,l:"Daftar"},{id:VW.STATS,l:"Stats"},{id:VW.TIMELINE,l:"Timeline"},{id:VW.INSIGHTS,l:"Kisah"},{id:VW.KELUARGA,l:"Keluarga"}].map(t=>(
           <button key={t.id} className={`navt ${vw===t.id?"on":""}`} onClick={()=>setVw(t.id)}>{t.l}</button>
         ))}
       </nav>
@@ -852,6 +1174,7 @@ function Workspace({family:initFam,user,onBack}){
         <button className="btn btn-sm" onClick={()=>setShowShare(true)}><Ic.Share/></button>
         <ThemeBtn/>
         {canEdit&&<button className="btn btn-sm" onClick={()=>setShowMar(true)} title="Kelola Pernikahan" style={{fontSize:11}}>💍</button>}
+        <button className="btn btn-sm" onClick={()=>setShowDQ(true)} title="Cek Kualitas Data" style={{fontSize:11}}>🔍</button>
         <button className="btn btn-sm" onClick={()=>setShowFar(true)} title="Kalkulator Faraidh" style={{fontSize:11}}>⚖️</button>
         <button className="btn btn-sm" onClick={()=>setShowIE(true)}><Ic.DL/></button>
         {!pp.length&&<button className="btn btn-sm" onClick={loadDemo}>Demo</button>}
@@ -859,13 +1182,14 @@ function Workspace({family:initFam,user,onBack}){
         {canEdit&&<button className="btn btn-p btn-sm" onClick={()=>{setEditP(null);setShowForm(true)}}><Ic.Plus/> Tambah</button>}
       </div>
     </header>
-    <div style={{flex:1,position:"relative",overflow:"hidden"}}>
-      {vw===VW.CANVAS&&<CanvasView pp={viewPP} marriages={mrs} onSel={setSel} selId={sel?.id} onPos={updPos} savedPos={pos}/>}
+    <div style={{flex:1,position:"relative",overflow:"hidden"}} className={isMobile?"ws-body-bnav":""}>
+      {vw===VW.CANVAS&&<CanvasView pp={povMode?povPP:viewPP} allPP={pp} marriages={mrs} onSel={setSel} selId={sel?.id} onPos={updPos} savedPos={pos} povMode={povMode} setPovMode={setPovMode} povBranches={povBranches} effectiveRoot={effectiveRoot} povHistory={povHistory} switchPov={switchPov} povBack={povBack} setPovRootId={setPovRootId} setPovHistory={setPovHistory} canEdit={canEdit} onQuickAdd={async(type,person)=>{if(type==='parent'){setEditP({parentId:null,spouseId:null,gender:'male',_quickType:'parent',_refPersonId:person.id});setShowForm(true)}else{setEditP({parentId:type==='child'?person.id:type==='sibling'?person.parentId:null,spouseId:type==='spouse'?person.id:null,gender:type==='spouse'?(person.gender==='male'?'female':'male'):'',_quickType:type,_refPersonId:person.id});setShowForm(true)}}} onAddMember={canEdit?()=>{setEditP(null);setShowForm(true)}:null} onImportKK={canEdit?()=>setShowKK(true):null} onImportGEDCOM={canEdit?()=>setShowIE(true):null}/>}
       {vw===VW.MAP&&<MapView pp={viewPP} onSel={setSel}/>}
-      {vw===VW.LIST&&<div style={{height:"100%",overflow:"auto"}}><div style={{maxWidth:800,margin:"0 auto",padding:"16px 16px 0"}}><FilterBar pp={pp} filters={filters} setFilters={setFilters}/></div><ListView pp={Object.keys(filters).length?FE.filter(viewPP,filters):viewPP} allPP={pp} onSel={setSel} canEdit={canEdit} fam={fam} onDone={reloadFam} flash={flash}/></div>}
+      {vw===VW.LIST&&<div style={{height:"100%",overflow:"auto"}}><div style={{maxWidth:800,margin:"0 auto",padding:"16px 16px 0"}}><FilterBar pp={pp} filters={filters} setFilters={setFilters}/></div><ListView pp={Object.keys(filters).length?FE.filter(viewPP,filters):viewPP} allPP={pp} onSel={setSel} canEdit={canEdit} fam={fam} onDone={reloadFam} flash={flash} myRole={myRole}/></div>}
       {vw===VW.STATS&&<div style={{height:"100%",overflow:"auto"}}><StatsView pp={viewPP}/></div>}
       {vw===VW.TIMELINE&&<div style={{height:"100%",overflow:"auto"}}><TimelineView pp={viewPP} onSel={setSel}/></div>}
-      {vw===VW.INSIGHTS&&<InsightsView pp={pp} fam={fam} canEdit={canEdit} onSaveFam={reloadFam} flash={flash}/>}
+      {vw===VW.INSIGHTS&&<InsightsView pp={pp} fam={fam} canEdit={canEdit} onSaveFam={reloadFam} flash={flash} marriages={mrs}/>}
+      {vw===VW.KELUARGA&&<KeluargaView pp={pp} fam={fam} user={user} canEdit={canEdit} flash={flash} marriages={mrs}/>}
       {sel&&<Sidebar p={sel} pp={pp} marriages={mrs} canEdit={canEdit} onClose={()=>setSel(null)} onEdit={p=>{setSel(null);setEditP(p);setShowForm(true)}} onDel={handleDel} onSel={setSel}/>}
     </div>
     {showForm&&canEdit&&<PersonForm person={editP} pp={pp} onSave={handleSave} onClose={()=>{setShowForm(false);setEditP(null)}}/>}
@@ -874,23 +1198,54 @@ function Workspace({family:initFam,user,onBack}){
     {showFar&&<FaraidhCalc pp={pp} onClose={()=>setShowFar(false)}/>}
     {showMar&&<MarriageModal pp={pp} marriages={mrs} fam={fam} onClose={()=>setShowMar(false)} onSave={reloadFam} flash={flash}/>}
     {showKK&&<KKModal fam={fam} onClose={()=>setShowKK(false)} onDone={reloadFam} flash={flash}/>}
+    {showDQ&&<DataQualityModal pp={pp} marriages={mrs} onClose={()=>setShowDQ(false)} flash={flash}/>}
+    {/* AI Chat */}
+    <button className="chat-fab" onClick={()=>setShowChat(!showChat)} title="Tanya AI">💬</button>
+    {showChat&&<ChatPanel pp={pp} fam={fam} marriages={mrs} onClose={()=>setShowChat(false)} flash={flash}/>}
+    {/* Milestone Modal */}
+    {milestone&&<div className="ms-ov" onClick={()=>setMilestone(null)}><div className="ms-card" onClick={e=>e.stopPropagation()}>
+      <div className="ms-emoji">{milestone.type==='story'?'✨':'🌳'}</div>
+      <div className="ms-title">{milestone.type==='story'?'Pohon keluarga mulai terbentuk!':'Pohon keluarga semakin besar!'}</div>
+      <div className="ms-desc">{milestone.type==='story'
+        ?`Keluarga ${milestone.familyName} sudah punya ${milestone.count} anggota. Biarkan AI NASAB merangkum asal-usul keluarga ini menjadi cerita yang indah.`
+        :`Sudah ${milestone.count} anggota! Coba fitur lanjutan:`}</div>
+      <div className="ms-btns">
+        {milestone.type==='story'&&<><button className="ms-btn-p" onClick={()=>{setMilestone(null);setVw(VW.INSIGHTS)}}>📖 Buat Kisah dengan AI</button><button className="ms-btn-s" onClick={()=>setMilestone(null)}>Nanti Saja</button></>}
+        {milestone.type==='advanced'&&<><button className="ms-btn-p" onClick={()=>{setMilestone(null);setShowFar(true)}}>⚖️ Kalkulator Faraidh</button><button className="ms-btn-s" onClick={()=>{setMilestone(null);setShowIE(true)}}>📄 Ekspor GEDCOM</button><button className="ms-btn-s" onClick={()=>setMilestone(null)}>Tutup</button></>}
+      </div>
+    </div></div>}
+    {/* Onboarding Wizard */}
+    {showWizard&&<OnboardingWizard fam={fam} onDone={async(count,err)=>{setShowWizard(false);await reloadFam();flash(err||`✨ ${count} anggota berhasil ditambahkan!`)}} onSkip={()=>setShowWizard(false)}/>}
+    {/* Bottom Nav Bar — mobile only */}
+    {isMobile&&<div className="bnav">{[{id:VW.CANVAS,l:"Pohon",i:"🌳"},{id:VW.LIST,l:"Daftar",i:"📋"},{id:VW.MAP,l:"Peta",i:"🗺️"},{id:VW.INSIGHTS,l:"Kisah",i:"📖"},{id:VW.KELUARGA,l:"Feed",i:"💬"}].map(t=><button key={t.id} className={`bnav-item${vw===t.id?" on":""}`} onClick={()=>setVw(t.id)}><span className="bnav-icon">{t.i}</span>{t.l}</button>)}</div>}
     {toast&&<div className="toast">{toast}</div>}
   </div>);
 }
 
 // ─── CANVAS ──────────────────────────────────────────────────
-function CanvasView({pp,marriages=[],onSel,selId,onPos,savedPos}){
+function CanvasView({pp,allPP,marriages=[],onSel,selId,onPos,savedPos,povMode,setPovMode,povBranches=[],effectiveRoot,povHistory=[],switchPov,povBack,setPovRootId,setPovHistory,canEdit,onQuickAdd,onAddMember,onImportKK,onImportGEDCOM}){
   const wr=useRef(null);const[pos,setPos]=useState({});const[pan,setPan]=useState({x:0,y:0});const[zm,setZm]=useState(.5);
   const[drag,setDrag]=useState(null);const[panning,setPanning]=useState(false);const[didD,setDidD]=useState(false);
   const ps=useRef({});const ds=useRef({});const fitted=useRef(false);const pinch=useRef(null);
-  // Expand/collapse state
+  // Expand/collapse state — adaptive threshold based on tree size
   const[collapsed,setCollapsed]=useState(()=>{
-    // Default: collapse nodes deeper than 3 generations if tree is large
-    const s=new Set();if(pp.length>20){pp.forEach(p=>{const g=FE.gen(pp,p.id);if(g>=2&&FE.ch(pp,p.id).length>0)s.add(p.id)})}return s});
+    const s=new Set();if(pp.length<=50)return s;
+    // For POV mode (filtered), use lighter collapse; for full tree, more aggressive
+    const threshold=pp.length>200?2:pp.length>80?3:4;
+    pp.forEach(p=>{const g=FE.gen(pp,p.id);if(g>=threshold&&FE.ch(pp,p.id).length>0)s.add(p.id)});return s});
   const toggleCollapse=useCallback((pid)=>{setCollapsed(prev=>{const n=new Set(prev);if(n.has(pid))n.delete(pid);else n.add(pid);return n})},[]);
+  // Recalculate collapse when member set changes (POV toggle, data reload)
+  const prevPPLen=useRef(pp.length);
+  useEffect(()=>{if(pp.length!==prevPPLen.current){prevPPLen.current=pp.length;
+    const s=new Set();if(pp.length>50){const threshold=pp.length>200?2:pp.length>80?3:4;
+      pp.forEach(p=>{const g=FE.gen(pp,p.id);if(g>=threshold&&FE.ch(pp,p.id).length>0)s.add(p.id)})}
+    setCollapsed(s)}},[pp.length]);
   // Search & focus state
   const[csq,setCsq]=useState("");const[csResults,setCsResults]=useState([]);const[csIdx,setCsIdx]=useState(-1);const[highlightId,setHighlightId]=useState(null);
   const csRef=useRef(null);
+  // Card action menu state
+  const[cardMenuId,setCardMenuId]=useState(null);
+  useEffect(()=>{if(!cardMenuId)return;const h=e=>{if(!e.target.closest('.cc-menu')&&!e.target.closest('.cc-add'))setCardMenuId(null)};window.addEventListener('mousedown',h);window.addEventListener('touchstart',h);return()=>{window.removeEventListener('mousedown',h);window.removeEventListener('touchstart',h)}},[cardMenuId]);
   useEffect(()=>{if(!csq.trim()){setCsResults([]);setCsIdx(-1);return}const q=csq.toLowerCase();setCsResults(pp.filter(p=>p.name.toLowerCase().includes(q)).slice(0,8));setCsIdx(-1)},[csq,pp]);
   const focusNode=useCallback((person)=>{
     const el=wr.current;if(!el)return;
@@ -907,7 +1262,7 @@ function CanvasView({pp,marriages=[],onSel,selId,onPos,savedPos}){
     Object.values(p).forEach(pt=>{minX=Math.min(minX,pt.x);minY=Math.min(minY,pt.y);maxX=Math.max(maxX,pt.x+CW);maxY=Math.max(maxY,pt.y+CH)});
     if(minX===Infinity)return;
     const pad=40;const tw=maxX-minX+pad*2,th=maxY-minY+pad*2;
-    const z=Math.max(0.1,Math.min(1,Math.min(vw/tw,vh/th)));
+    const z=Math.max(0.3,Math.min(1.2,Math.min(vw/tw,vh/th)));
     const tcx=(minX+maxX)/2,tcy=(minY+maxY)/2;
     setZm(z);setPan({x:vw/2-tcx*z,y:vh/2-tcy*z});
   },[]);
@@ -929,7 +1284,7 @@ function CanvasView({pp,marriages=[],onSel,selId,onPos,savedPos}){
     if(!collapsed.size&&savedPos&&Object.keys(savedPos).length>=pp.length){p=savedPos}else{p=autoLayout(pp,marriages,collapsed);onPos(p)}
     setPos(p);
     fitted.current=false;
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{comfortView(p);fitted.current=true}));
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{fitAll(p);fitted.current=true}));
   },[pp,collapsed]);
   useEffect(()=>{if(fitted.current&&Object.keys(pos).length>0)onPos(pos)},[pos]);
   const conns=useMemo(()=>getConns(pp,pos,marriages),[pp,pos,marriages]);
@@ -954,35 +1309,44 @@ function CanvasView({pp,marriages=[],onSel,selId,onPos,savedPos}){
   const fit=()=>{const a=autoLayout(pp,marriages,collapsed);setPos(a);onPos(a);requestAnimationFrame(()=>fitAll(a))};
   const expandAll=()=>setCollapsed(new Set());
   const collapseAll=()=>{const s=new Set();pp.forEach(p=>{if(FE.ch(pp,p.id).length)s.add(p.id)});setCollapsed(s)};
-  if(!pp.length)return<div className="empty"><h3>Mulai dari sini</h3><p>Tambahkan anggota pertama atau muat data demo</p></div>;
+  if(!pp.length)return<div style={{height:"100%",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center",maxWidth:400,padding:32,background:"var(--bg2)",border:"2px dashed var(--pri)",borderRadius:16,opacity:.95,animation:"mUp .3s ease"}}>
+    <div style={{fontSize:48,marginBottom:12}}>🌱</div>
+    <h3 style={{fontFamily:"var(--f-display)",fontSize:20,marginBottom:6}}>Pohon keluarga ini masih kosong</h3>
+    <p style={{fontSize:12,color:"var(--t3)",marginBottom:20,lineHeight:1.6}}>Mulai dengan menambah diri kamu sebagai anggota pertama, atau import data yang sudah ada.</p>
+    <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
+      {onAddMember&&<button className="btn btn-p" onClick={onAddMember}>👤 Tambah Anggota</button>}
+      {onImportKK&&<button className="btn" onClick={onImportKK}>📷 Import KK</button>}
+      {onImportGEDCOM&&<button className="btn" onClick={onImportGEDCOM}>📄 Import GEDCOM</button>}
+    </div></div></div>;
+  const rootPerson=allPP?.find(p=>p.id===effectiveRoot);
   return(<div ref={wr} className={`cvs ${panning?"grabbing":""}`} onMouseDown={onPS} onTouchStart={onPS}>
+    {/* POV bar */}
+    <div className="pov-bar">
+      <div className="pov-left">
+        {povHistory.length>0&&povHistory.map((h,i)=><span key={i}><button className="pov-crumb" onClick={()=>povBack(i)}>{h.label}</button><span className="pov-sep">›</span></span>)}
+        {povMode&&rootPerson&&<span className="pov-current">{rootPerson.name}</span>}
+        {povMode&&allPP&&allPP.length!==pp.length&&<span className="pov-count">{pp.length}/{allPP.length} anggota</span>}
+      </div>
+      <div className="pov-right">
+        {povMode&&allPP&&allPP.length!==pp.length&&<button className="pov-show-all" onClick={()=>setPovMode(false)}>Tampilkan Semua</button>}
+        {povMode&&<select className="pov-sel" value={effectiveRoot||""} onChange={e=>{setPovHistory([]);setPovRootId(e.target.value)}}>{(allPP||pp).filter(p=>FE.ch(allPP||pp,p.id).length>0||!p.parentId).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+        <button className={`pov-toggle ${povMode?"on":""}`} onClick={()=>{setPovMode(!povMode);setPovHistory([]);setPovRootId(null)}} title={povMode?"Mode POV aktif":"Mode full tree"}>{povMode?"POV":"Full"}</button>
+      </div>
+    </div>
     <div className="cvs-inner" style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zm})`,width:bnd.w,height:bnd.h}}>
-      {Object.entries(gls).map(([g,lane])=>{const gi=parseInt(g);const gl=GL[gi]||{l:`Gen ${gi+1}`,i:"👤"};const c=GC[gi%GC.length];return(<div key={g} className="gl" style={{top:lane.mi-22,height:lane.mx-lane.mi+44}}><div className="gl-bg" style={{borderColor:c,background:c}}/><div className="gl-strip" style={{color:c}}><span className="gl-emoji">{gl.i}</span><span className="gl-title">{gl.l}</span><span className="gl-num">Gen {gi+1}</span></div></div>)})}
+      {Object.entries(gls).map(([g,lane])=>{const gi=parseInt(g);const gl=GL[gi]||{l:`Gen ${gi+1}`};const c=GC[gi%GC.length];const minX=Math.min(...pp.filter(p=>FE.gen(pp,p.id)===gi).map(p=>pos[p.id]?.x??Infinity));return(<div key={g} className="gen-lane" style={{position:"absolute",left:Math.max(20,minX-160),top:lane.mi+CH/2-14,pointerEvents:"none",zIndex:1}}><div style={{background:`${c}15`,border:`1px solid ${c}40`,color:c,padding:"4px 12px",borderRadius:14,fontSize:11,fontWeight:600,fontFamily:"var(--f-mono)",letterSpacing:".4px",whiteSpace:"nowrap"}}>Gen {gi+1} · {gl.l}</div></div>)})}
       <svg className="conn-svg" width={bnd.w} height={bnd.h}>
-        <defs>
-          <linearGradient id="gsp" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="var(--rose)" stopOpacity=".6"/><stop offset="50%" stopColor="var(--rose)" stopOpacity=".3"/><stop offset="100%" stopColor="var(--rose)" stopOpacity=".6"/></linearGradient>
-          <linearGradient id="gpc" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor="var(--pri)" stopOpacity=".5"/><stop offset="100%" stopColor="var(--pri)" stopOpacity=".2"/></linearGradient>
-          <filter id="glow"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-        </defs>
         {conns.map((c,i)=>{
-        if(c.t==="sp"){const mx=(c.x1+c.x2)/2,gap=c.x2-c.x1;return<g key={i}>
-          <path d={`M${c.x1},${c.y1} C${c.x1+gap*.3},${c.y1-12} ${c.x2-gap*.3},${c.y1-12} ${c.x2},${c.y2}`} fill="none" stroke="url(#gsp)" strokeWidth="2" strokeDasharray="6,4" style={{animation:"flowDash 1.5s linear infinite"}}/>
-          <circle cx={c.x1} cy={c.y1} r="3" fill="var(--rose)" opacity=".4"/>
-          <circle cx={c.x2} cy={c.y2} r="3" fill="var(--rose)" opacity=".4"/>
-          <rect x={mx-20} y={c.y1-18} width="40" height="15" rx="7.5" fill="var(--bg1)" stroke="var(--rose)" strokeWidth=".5" opacity=".9"/>
-          <text x={mx} y={c.y1-8} textAnchor="middle" fontSize="7" fill="var(--rose)" fontWeight="700" fontFamily="var(--f-mono)">NIKAH</text>
-        </g>}
-        if(c.t==="pd"){const mx=c.x1,my=(c.y1+c.y2)/2;return<g key={i}>
-          <path d={`M${c.x1},${c.y1} C${c.x1},${c.y1+20} ${c.x2},${c.y2-20} ${c.x2},${c.y2}`} fill="none" stroke="url(#gpc)" strokeWidth="2"/>
-          {c.label&&<><rect x={mx-26} y={my-8} width="52" height="16" rx="8" fill="var(--bg1)" stroke="var(--pri)" strokeWidth=".5" opacity=".9"/><text x={mx} y={my+2.5} textAnchor="middle" fontSize="7" fill="var(--pri)" fontWeight="700" fontFamily="var(--f-mono)">{c.label}</text></>}
-        </g>}
-        if(c.t==="br"){const r=6;return<path key={i} d={`M${c.x1+r},${c.y1} L${c.x2-r},${c.y2} M${c.x1},${c.y1} Q${c.x1},${c.y1} ${c.x1+r},${c.y1} M${c.x2-r},${c.y2} Q${c.x2},${c.y2} ${c.x2},${c.y2}`} fill="none" stroke="var(--pri)" strokeWidth="1.5" opacity=".25"/>}
-        if(c.t==="cd"){const clr=c.gender==="male"?"var(--male-t)":"var(--fem-t)";const dy=c.y2-c.y1;return<g key={i}>
-          <path d={`M${c.x1},${c.y1} C${c.x1},${c.y1+dy*.4} ${c.x2},${c.y2-dy*.4} ${c.x2},${c.y2}`} fill="none" stroke={clr} strokeWidth="1.5" opacity=".4"/>
-          <circle cx={c.x2} cy={c.y2} r="3.5" fill={clr} opacity=".3"/><circle cx={c.x2} cy={c.y2} r="1.5" fill={clr} opacity=".7"/>
-        </g>}
+        if(c.t==="sp"){const mx=(c.x1+c.x2)/2;return(<g key={i}>
+          <line x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--rose)" strokeWidth="1.5" strokeDasharray="5,4" opacity=".55"/>
+          <circle cx={mx} cy={c.y1} r="9" fill="var(--bg1)" stroke="var(--rose)" strokeWidth="1"/>
+          <text x={mx} y={c.y1+1} textAnchor="middle" dominantBaseline="central" fontSize="13" fill="var(--rose)">∞</text>
+        </g>)}
+        if(c.t==="pd"){return<path key={i} d={`M ${c.x1} ${c.y1} L ${c.x2} ${c.y2}`} fill="none" stroke="var(--bdr2)" strokeWidth="1.5" opacity=".7"/>}
+        if(c.t==="br"){return<line key={i} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--bdr2)" strokeWidth="1.5" opacity=".7"/>}
+        if(c.t==="cd"){const dy=c.y2-c.y1;return<path key={i} d={`M ${c.x1} ${c.y1} C ${c.x1} ${c.y1+dy*0.5}, ${c.x2} ${c.y1+dy*0.5}, ${c.x2} ${c.y2}`} fill="none" stroke="var(--bdr2)" strokeWidth="1.5" opacity=".7"/>}
         return null})}</svg>
-      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];const gl=GL[g]||{l:`Gen ${g+1}`};const bd=p.birthDate?new Date(p.birthDate).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}):"";const alive=!p.deathDate;const chCount=FE.ch(pp,p.id).length;const isCol=collapsed.has(p.id);const descCount=isCol?FE.desc(pp,p.id):0;return(<div key={p.id} className={`cc ${p.gender} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""} ${highlightId===p.id?"highlighted":""}`} style={{left:po.x,top:po.y}} onMouseDown={e=>dS(e,p.id)} onTouchStart={e=>dS(e,p.id)} onClick={e=>handleCardClick(e,p)}><div className="cc-bar"/><div className="cc-body"><div className={`cc-av ${p.gender}`}>{ini(p.name)}<div className="cc-status" style={{background:alive?"#22c55e":"var(--t3)"}}/></div><div className="cc-info"><div className="cc-name">{p.name}</div><div className="cc-meta">{p.gender==="male"?"♂":"♀"}{bd?` · ${bd}`:""}{!alive?" · Alm.":""}</div>{p.location?.address&&<div className="cc-meta">📍 {p.location.address.split(",")[0]}</div>}</div></div><div className="cc-gen" style={{background:c}}>{g+1}</div>{chCount>0&&<div className="cc-toggle" onClick={e=>{e.stopPropagation();toggleCollapse(p.id)}} title={isCol?`Tampilkan ${descCount} keturunan`:"Sembunyikan"}>{isCol?`+${descCount}`:"\u2212"}</div>}</div>)})}
+      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];const gl=GL[g]||{l:`Gen ${g+1}`};const bd=p.birthDate?new Date(p.birthDate).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}):"";const alive=!p.deathDate;const chCount=FE.ch(pp,p.id).length;const isCol=collapsed.has(p.id);const descCount=isCol?FE.desc(pp,p.id):0;const isBranch=povMode&&povBranches.some(b=>b.personId===p.id);const isDec=!!p.deathDate;const yr=p.birthDate?new Date(p.birthDate).getFullYear():null;const age=FE.age(p);const meta=[p.gender==="male"?"♂":"♀",yr?`${yr}`:null,age!==null?`${age} th`:null].filter(Boolean).join(" · ");return(<div key={p.id} className={`cc ${p.gender} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""} ${highlightId===p.id?"highlighted":""} ${isDec?"deceased":""}`} style={{left:po.x,top:po.y,width:CW,minHeight:CH}} onMouseDown={e=>dS(e,p.id)} onTouchStart={e=>dS(e,p.id)} onClick={e=>handleCardClick(e,p)}><span className="cc-badge-gen">G{g+1}</span>{p.nik&&<span className="cc-badge-nik">NIK</span>}<div className={`cc-av ${p.gender}`}>{ini(p.name)}<div className="cc-status" style={{background:alive?"#22c55e":"var(--t3)"}}/></div><div className="cc-nm">{p.name}</div><div className="cc-mt">{meta}</div>{chCount>0&&<div className="cc-toggle" onClick={e=>{e.stopPropagation();toggleCollapse(p.id)}} title={isCol?`Tampilkan ${descCount} keturunan`:"Sembunyikan"}>{isCol?`+${descCount}`:"\u2212"}</div>}{isBranch&&<div className="cc-branch" onClick={e=>{e.stopPropagation();switchPov(p.id)}} title={`Lihat keluarga ${p.name}`}>🔗 Cabang →</div>}{canEdit&&<button className="cc-add" onClick={e=>{e.stopPropagation();setCardMenuId(cardMenuId===p.id?null:p.id)}} title="Tambah anggota">+</button>}{cardMenuId===p.id&&<div className="cc-menu" onClick={e=>e.stopPropagation()}>{(()=>{const hasParent=!!p.parentId;const parentCount=p.parentId?1+(pp.find(x=>x.id===p.parentId)?.spouseId?1:0):0;const canAddParent=parentCount<2&&!hasParent;return[{k:'parent',i:'👆',l:'Orang Tua',dis:!canAddParent},{k:'spouse',i:'💍',l:'Pasangan',dis:false},{k:'child',i:'👶',l:'Anak',dis:false},{k:'sibling',i:'👥',l:'Saudara',dis:!p.parentId}].map(o=><button key={o.k} className="cc-menu-item" disabled={o.dis} onClick={()=>{setCardMenuId(null);onQuickAdd(o.k,p)}}><span className="cc-menu-icon" style={{borderColor:o.dis?'var(--bdr)':'var(--pri)'}}>{o.i}</span>{o.l}</button>)})()}</div>}</div>)})}
     </div>
     {/* Search overlay */}
     <div className="cvs-search"><div style={{position:"relative"}}><span className="cvs-search-icon"><Ic.Search/></span><input ref={csRef} className="cvs-search-input" placeholder="Cari anggota..." value={csq} onChange={e=>setCsq(e.target.value)} onKeyDown={csKeyDown}/></div>
@@ -1020,41 +1384,117 @@ function ShareModal({fam,user,onClose,onUpd,flash}){const[em,setEm]=useState("")
     <div style={{marginTop:12,padding:"8px 10px",background:"var(--bg2)",borderRadius:6,fontSize:9,color:"var(--t3)",lineHeight:1.5,fontFamily:"var(--f-mono)"}}>OWNER = full access · EDITOR = tambah/edit · VIEWER = lihat saja</div>
   </div></div></div>)}
 function FilterBar({pp,filters:f,setFilters:sF}){const gs=useMemo(()=>[...new Set(pp.map(p=>FE.gen(pp,p.id)))].sort(),[pp]);const ls=useMemo(()=>[...new Set(pp.filter(p=>p.location?.address).map(p=>p.location.address.split(",")[0].trim()))].sort(),[pp]);const provs=useMemo(()=>{const s=new Set();pp.forEach(p=>{if(p.nik&&p.nik.length>=2){const pc=parseInt(p.nik.slice(0,2));if(PROV[pc])s.add(pc)}});return[...s].sort((a,b)=>a-b)},[pp]);const active=Object.values(f).some(v=>v&&v!=="all");return(<div className="fbar"><label>Gender<select value={f.gender||"all"} onChange={e=>sF(x=>({...x,gender:e.target.value}))}><option value="all">Semua</option><option value="male">♂</option><option value="female">♀</option></select></label><label>Generasi<select value={f.generation??"all"} onChange={e=>sF(x=>({...x,generation:e.target.value}))}><option value="all">Semua</option>{gs.map(g=><option key={g} value={g}>{(GL[g]||{l:`Gen ${g+1}`}).l}</option>)}</select></label><label>Status<select value={f.status||"all"} onChange={e=>sF(x=>({...x,status:e.target.value}))}><option value="all">Semua</option><option value="living">Hidup</option><option value="deceased">Almarhum</option></select></label><label>Lokasi<select value={f.location||""} onChange={e=>sF(x=>({...x,location:e.target.value}))}><option value="">Semua</option>{ls.map(l=><option key={l} value={l}>{l}</option>)}</select></label><label>Prov. Asal<select value={f.provNik||"all"} onChange={e=>sF(x=>({...x,provNik:e.target.value}))}><option value="all">Semua</option>{provs.map(pc=><option key={pc} value={pc}>{PROV[pc].n}</option>)}</select></label><label>NIK<select value={f.nik||"all"} onChange={e=>sF(x=>({...x,nik:e.target.value}))}><option value="all">Semua</option><option value="has">Ada NIK</option><option value="none">Tanpa NIK</option></select></label>{active&&<span className="ftag" onClick={()=>sF({})}>✕ Reset</span>}</div>)}
-function InsightsView({pp,fam,canEdit,onSaveFam,flash}){const[fid,setFid]=useState("");const[tid,setTid]=useState("");const[rr,setRr]=useState(null);const[st,setSt]=useState("");const[sp,setSp]=useState("");const stories=fam.stories||[];const findR=()=>{if(fid&&tid)setRr(FE.findRel(pp,fid,tid))};const bds=useMemo(()=>FE.bdays(pp,90),[pp]);const gd=useMemo(()=>{const d={};pp.forEach(p=>{const g=FE.gen(pp,p.id);d[g]=(d[g]||0)+1});return Object.entries(d).sort((a,b)=>a[0]-b[0]).map(([g,c])=>({gen:parseInt(g),count:c,label:(GL[parseInt(g)]||{l:`Gen ${parseInt(g)+1}`}).l,color:GC[parseInt(g)%GC.length]}))},[pp]);const ld=useMemo(()=>{const d={};pp.filter(p=>p.location?.address).forEach(p=>{const c=p.location.address.split(",")[0].trim();d[c]=(d[c]||0)+1});return Object.entries(d).sort((a,b)=>b[1]-a[1]).slice(0,6)},[pp]);
+// ─── BIOGRAPHY ENGINE ────────────────────────────────────────
+function generateBio(pp,fam,marriages=[]){
+  const sections=[];const roots=FE.roots(pp,marriages);const root=roots[0];
+  // Section 1: Asal-Usul
+  if(root){const sps=FE.spouses(pp,root,marriages);const ch=FE.ch(pp,root.id);const loc=root.location?.address||"";
+    let t=`Keluarga besar ini berawal dari ${root.name}`;if(sps.length)t+=` bersama ${sps.map(s=>s.name).join(" dan ")}`;if(loc)t+=`, berdomisili di ${loc.split(",")[0]}`;t+=`. Dari pernikahan ini, lahir ${ch.length} orang anak: ${ch.map(c=>c.name).join(", ")}.`;
+    sections.push({icon:"🌳",title:"Asal-Usul",text:t})}
+  // Section 2: Generasi Kedua
+  if(root){const ch=FE.ch(pp,root.id);if(ch.length){let t="";ch.forEach((c,i)=>{const sp=FE.spouses(pp,c,marriages);const gc=FE.ch(pp,c.id);const loc=c.location?.address?.split(",")[0]||"";
+    t+=`${c.name}`;if(sp.length)t+=` menikah dengan ${sp.map(s=>s.name).join(", ")}`;if(gc.length)t+=` dan dikaruniai ${gc.length} anak`;if(loc)t+=` (${loc})`;t+=". ";if(c.notes)t+=c.notes+". "});
+    sections.push({icon:"👨‍👩‍👧‍👦",title:"Generasi Kedua",text:t})}}
+  // Section 3: Persebaran
+  const locs={};pp.filter(p=>p.location?.address).forEach(p=>{const c=p.location.address.split(",")[0].trim();locs[c]=(locs[c]||0)+1});
+  const topLocs=Object.entries(locs).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  if(topLocs.length){const migr=pp.filter(p=>p.nik&&p.location?.address).filter(p=>{const pc=parseInt(p.nik.slice(0,2));const prov=PROV[pc];return prov&&!p.location.address.toLowerCase().includes(prov.n.toLowerCase().split(" ")[0])}).length;
+    let t=`Anggota keluarga tersebar di ${topLocs.length} wilayah: ${topLocs.map(([c,n])=>`${c} (${n} orang)`).join(", ")}.`;if(migr)t+=` ${migr} anggota merantau dari provinsi asal mereka.`;
+    sections.push({icon:"🗺️",title:"Persebaran",text:t})}
+  // Section 4: Milestones
+  const s=FE.stats(pp);const bds=FE.bdays(pp,90);
+  let t4=`Hingga saat ini, keluarga terdiri dari ${s.total} anggota dalam ${s.generations} generasi. ${s.males} laki-laki dan ${s.females} perempuan. ${s.living} masih hidup, ${s.deceased} telah berpulang.`;
+  if(bds.length)t4+=` Ulang tahun terdekat: ${bds[0].person.name} (${bds[0].days} hari lagi, ke-${bds[0].age}).`;
+  sections.push({icon:"📊",title:"Catatan Penting",text:t4});
+  // Section 5: Stories
+  if(fam.stories?.length){const st=fam.stories.slice(0,3).map(s=>`"${s.text}" — ${s.author}`).join("\n\n");
+    sections.push({icon:"📖",title:"Cerita Keluarga",text:st})}
+  // Section 6: Penutup
+  sections.push({icon:"🤲",title:"Penutup",text:`"Pelajarilah nasab kalian agar kalian bisa menyambung tali silaturahmi." (HR. Tirmidzi)\n\nDibuat dengan NASAB — Jaga Nasabmu.`});
+  return sections;
+}
+const loadHtml2Pdf=()=>{if(window.html2pdf)return Promise.resolve(window.html2pdf);return new Promise(r=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";s.onload=()=>r(window.html2pdf);document.head.appendChild(s)})};
+
+function InsightsView({pp,fam,canEdit,onSaveFam,flash,marriages=[]}){const[fid,setFid]=useState("");const[tid,setTid]=useState("");const[rr,setRr]=useState(null);const[st,setSt]=useState("");const[sp,setSp]=useState("");const stories=fam.stories||[];const findR=()=>{if(fid&&tid)setRr(FE.findRel(pp,fid,tid))};const bds=useMemo(()=>FE.bdays(pp,90),[pp]);const gd=useMemo(()=>{const d={};pp.forEach(p=>{const g=FE.gen(pp,p.id);d[g]=(d[g]||0)+1});return Object.entries(d).sort((a,b)=>a[0]-b[0]).map(([g,c])=>({gen:parseInt(g),count:c,label:(GL[parseInt(g)]||{l:`Gen ${parseInt(g)+1}`}).l,color:GC[parseInt(g)%GC.length]}))},[pp]);const ld=useMemo(()=>{const d={};pp.filter(p=>p.location?.address).forEach(p=>{const c=p.location.address.split(",")[0].trim();d[c]=(d[c]||0)+1});return Object.entries(d).sort((a,b)=>b[1]-a[1]).slice(0,6)},[pp]);
   // Migration tracker
   const migrasi=useMemo(()=>{return pp.filter(p=>p.nik&&p.nik.length>=2&&p.location?.address).map(p=>{const pc=parseInt(p.nik.slice(0,2));const prov=PROV[pc];if(!prov)return null;const dom=p.location.address.split(",")[0].trim();const asal=prov.n;const merantau=!p.location.address.toLowerCase().includes(asal.toLowerCase().split(" ")[0]);return{name:p.name,asal,domisili:dom,merantau}}).filter(Boolean)},[pp]);
   const addS=async()=>{if(!st.trim())return;try{await API.addStory(fam.id,{text:st,personId:sp||null,personName:sp?(pp.find(p=>p.id===sp)?.name||""):""});onSaveFam();setSt("");flash("Cerita disimpan!")}catch(e){flash(e.message)}};
-  return(<div className="ins"><h2 style={{fontFamily:"var(--f-display)",fontSize:20,marginBottom:14}}>Insights</h2><div className="ins-g">
+  const[bioSections,setBioSections]=useState(null);const[aiBio,setAiBio]=useState("");const[aiBusy,setAiBusy]=useState(false);const[bioStyle,setBioStyle]=useState("naratif");const[shareSlug,setShareSlug]=useState("");const[shareUrl,setShareUrl]=useState("");
+  const genBio=()=>setBioSections(generateBio(pp,fam,marriages));
+  const genAI=async()=>{setAiBusy(true);
+    try{const summary={family:fam.name,total:pp.length,generations:FE.stats(pp).generations,root:pp.find(p=>!p.parentId)?.name,members:pp.slice(0,20).map(p=>({name:p.name,gender:p.gender,notes:p.notes}))};
+      const styleMap={naratif:"gaya naratif hangat",formal:"gaya formal akademis",puitis:"gaya puitis sastrawi"};
+      const prompt=`Tulis biografi keluarga Indonesia berdasarkan data ini dalam Bahasa Indonesia, 500 kata, ${styleMap[bioStyle]||styleMap.naratif}:\n${JSON.stringify(summary)}`;
+      const text=await callAI(prompt);setAiBio(text)}catch(e){flash("AI error: "+e.message)}setAiBusy(false)};
+  const exportPdf=async()=>{try{const h2p=await loadHtml2Pdf();const el=document.getElementById("bio-content");if(!el)return;
+      h2p().from(el).set({margin:10,filename:`Kisah Keluarga ${fam.name}.pdf`,html2canvas:{scale:2},jsPDF:{unit:"mm",format:"a4"}}).save();flash("PDF diunduh")}catch(e){flash("PDF error: "+e.message)}};
+  const shareBio=async()=>{if(!bioSections)return;try{const content=JSON.stringify(bioSections);
+      const r=await API._f(`/api/families/${fam.id}/biography`,{method:"POST",body:JSON.stringify({content,is_public:true})});
+      const url=`${window.location.origin}/kisah/${r.slug}`;setShareUrl(url);setShareSlug(r.slug);navigator.clipboard?.writeText(url);flash("Link disalin!")}catch(e){flash(e.message)}};
+  return(<div className="ins"><h2 style={{fontFamily:"var(--f-display)",fontSize:20,marginBottom:14}}>Kisah Keluarga</h2>
+    {/* Biography section */}
+    <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap"}}>
+      <button className="btn btn-sm btn-p" onClick={genBio}>📝 Auto</button>
+      <button className="btn btn-sm" onClick={genAI} disabled={aiBusy}>{aiBusy?"Menulis...":"✨ AI"}</button>
+      <select className="fsel" style={{width:100,padding:"3px 6px",fontSize:10}} value={bioStyle} onChange={e=>setBioStyle(e.target.value)}><option value="naratif">Naratif</option><option value="formal">Formal</option><option value="puitis">Puitis</option></select>
+      {bioSections&&<button className="btn btn-sm" onClick={exportPdf}>📄 PDF</button>}
+      {bioSections&&<button className="btn btn-sm" onClick={shareBio}>🔗 Share</button>}
+      {shareUrl&&<span style={{fontSize:9,color:"var(--pri)",alignSelf:"center",fontFamily:"var(--f-mono)"}}>{shareUrl}</span>}
+    </div>
+    {(bioSections||aiBio)&&<div id="bio-content" style={{maxWidth:640,margin:"0 auto 20px",padding:24,background:"var(--bg1)",border:"1px solid var(--bdr)",borderRadius:12}}>
+      <h2 style={{fontFamily:"var(--f-display)",fontSize:22,textAlign:"center",marginBottom:4}}>Kisah Keluarga {fam.name}</h2>
+      <div style={{textAlign:"center",fontSize:10,color:"var(--t3)",marginBottom:20}}>{new Date().toLocaleDateString("id-ID",{year:"numeric",month:"long",day:"numeric"})}</div>
+      {aiBio?<div style={{fontFamily:"var(--f-body)",fontSize:14,lineHeight:1.8,color:"var(--t1)",whiteSpace:"pre-wrap"}}>{aiBio}</div>:
+      bioSections?.map((s,i)=><div key={i} style={{marginBottom:20}}>
+        <h3 style={{fontFamily:"var(--f-display)",fontSize:18,marginBottom:6,display:"flex",alignItems:"center",gap:8}}><span>{s.icon}</span>{s.title}</h3>
+        <p style={{fontFamily:"var(--f-body)",fontSize:14,lineHeight:1.8,color:"var(--t2)",whiteSpace:"pre-wrap"}}>{s.text}</p>
+      </div>)}
+      <div style={{textAlign:"center",marginTop:24,fontSize:10,color:"var(--t3)",borderTop:"1px solid var(--bdr)",paddingTop:12}}>Dibuat dengan NASAB — nasab.biz.id</div>
+    </div>}
+    {/* Existing insights tools */}
+    <div className="ins-g">
     <div className="ins-c"><h3><span>🔍</span>Pencari Hubungan</h3><div className="rf-sel"><select className="fsel" value={fid} onChange={e=>setFid(e.target.value)}><option value="">Orang 1...</option>{pp.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><select className="fsel" value={tid} onChange={e=>setTid(e.target.value)}><option value="">Orang 2...</option>{pp.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><button className="btn btn-p btn-sm" onClick={findR} disabled={!fid||!tid}>Cari</button></div>{rr&&<div className="rf-res"><div className="rf-res-l" style={{color:rr.path.length?"var(--pri)":"var(--t3)"}}>{rr.label}</div>{rr.path.length>0&&<div className="rf-res-p"><span className="rf-node">{pp.find(p=>p.id===fid)?.name}</span>{rr.path.map((s,i)=><span key={i} style={{display:"flex",alignItems:"center",gap:3}}><span className="rf-arrow">→</span><span className="rf-node">{pp.find(p=>p.id===s.id)?.name}</span></span>)}</div>}</div>}</div>
     <div className="ins-c"><h3><span>🎂</span>Ulang Tahun</h3>{!bds.length?<div style={{fontSize:11,color:"var(--t3)",textAlign:"center",padding:12}}>Tidak ada data</div>:bds.slice(0,6).map((b,i)=><div key={i} className="bd-i"><div className="bd-d" style={{background:b.days===0?"var(--pri)":b.days<=7?"rgba(236,72,153,.15)":"var(--bg2)",color:b.days===0?"#000":b.days<=7?"var(--rose)":"var(--t2)"}}>{b.days===0?"TODAY":b.days+"d"}</div><div className="bd-info">{b.person.name} <span>ke-{b.age}, {b.next.toLocaleDateString("id-ID",{day:"numeric",month:"short"})}</span></div></div>)}</div>
     <div className="ins-c"><h3><span>📊</span>Distribusi</h3><div className="gb">{gd.map(g=><div key={g.gen} style={{width:`${(g.count/pp.length)*100}%`,background:g.color}}/>)}</div><div className="gb-leg">{gd.map(g=><div key={g.gen} className="gb-leg-i"><div className="gb-leg-d" style={{background:g.color}}/>{g.label} ({g.count})</div>)}</div>{ld.length>0&&<div style={{marginTop:12}}>{ld.map(([city,count],i)=><div key={i} style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}><span style={{fontSize:10,flex:1}}>{city}</span><div style={{width:80,height:5,background:"var(--bg3)",borderRadius:3,overflow:"hidden"}}><div style={{width:`${(count/pp.length)*100}%`,height:"100%",background:"var(--pri)",borderRadius:3}}/></div><span style={{fontSize:9,color:"var(--t3)",minWidth:20,textAlign:"right",fontFamily:"var(--f-mono)"}}>{count}</span></div>)}</div>}</div>
-    <div className="ins-c"><h3><span>⚡</span>Fakta</h3>{(()=>{const s=FE.stats(pp);const mc=pp.reduce((b,p)=>{const c=FE.ch(pp,p.id).length;return c>b.c?{p,c}:b},{p:null,c:0});const md=pp.reduce((b,p)=>{const d=FE.desc(pp,p.id);return d>b.c?{p,c:d}:b},{p:null,c:0});return<div style={{fontSize:11,lineHeight:2,color:"var(--t2)"}}>{pp.length?`${((s.males/pp.length)*100).toFixed(0)}% laki-laki`:""}<br/>{pp.length?`${((s.geotagged/pp.length)*100).toFixed(0)}% geotagged`:""}<br/>{mc.p&&<>🏆 {mc.p.name}: {mc.c} anak<br/></>}{md.p&&<>🌳 {md.p.name}: {md.c} keturunan<br/></>}{ld.length} kota</div>})()}</div>
+    <div className="ins-c"><h3><span>⚡</span>Fakta</h3>{(()=>{const s=FE.stats(pp);const mc=pp.reduce((b,p)=>{const c=FE.chAll(pp,p.id,marriages).length;return c>b.c?{p,c}:b},{p:null,c:0});const md=pp.reduce((b,p)=>{const d=FE.descAll(pp,p.id,marriages);return d>b.c?{p,c:d}:b},{p:null,c:0});return<div style={{fontSize:11,lineHeight:2,color:"var(--t2)"}}>{pp.length?`${((s.males/pp.length)*100).toFixed(0)}% laki-laki`:""}<br/>{pp.length?`${((s.geotagged/pp.length)*100).toFixed(0)}% geotagged`:""}<br/>{mc.p&&<>🏆 {mc.p.name}: {mc.c} anak<br/></>}{md.p&&<>🌳 {md.p.name}: {md.c} keturunan<br/></>}{ld.length} kota</div>})()}</div>
     <div className="ins-c"><h3><span>🚀</span>Pola Migrasi</h3>{!migrasi.length?<div style={{fontSize:11,color:"var(--t3)",textAlign:"center",padding:12}}>Tambahkan NIK + lokasi untuk analisis migrasi</div>:<div>{migrasi.filter(m=>m.merantau).length>0&&<div style={{fontSize:11,color:"var(--pri)",marginBottom:8,fontWeight:600}}>{migrasi.filter(m=>m.merantau).length} dari {migrasi.length} ({(migrasi.filter(m=>m.merantau).length/migrasi.length*100).toFixed(0)}%) merantau</div>}{migrasi.slice(0,8).map((m,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:6,fontSize:10,marginBottom:4,color:m.merantau?"var(--t1)":"var(--t3)"}}><span style={{fontWeight:600,minWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</span><span style={{fontSize:8,color:"var(--t3)"}}>{m.asal}</span>{m.merantau&&<><span style={{color:"var(--pri)"}}>→</span><span style={{fontSize:8,color:"var(--pri)"}}>{m.domisili}</span></>}{!m.merantau&&<span style={{fontSize:8,color:"var(--t3)"}}>— tetap</span>}</div>)}</div>}</div>
-    <div className="ins-c ins-cf"><h3><span>📖</span>Cerita Keluarga</h3>{canEdit&&<div style={{marginBottom:10}}><div style={{display:"flex",gap:5,marginBottom:5}}><select className="fsel" value={sp} onChange={e=>setSp(e.target.value)} style={{width:160,fontSize:10}}><option value="">Cerita umum</option>{pp.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><button className="btn btn-p btn-sm" onClick={addS} disabled={!st.trim()}>Simpan</button></div><textarea className="fta" value={st} onChange={e=>setSt(e.target.value)} placeholder="Tulis cerita, kenangan, pesan..." style={{minHeight:40}}/></div>}{!stories.length?<div style={{fontSize:11,color:"var(--t3)",textAlign:"center",padding:16}}>Belum ada cerita</div>:stories.map(s=><div key={s.id} className="st-entry"><div className="st-date">{new Date(s.date).toLocaleDateString("id-ID",{year:"numeric",month:"short",day:"numeric"})}{s.personName&&` · ${s.personName}`}</div><div className="st-text">{s.text}</div><div className="st-author">— {s.author}</div></div>)}</div>
+    <div className="ins-c ins-cf"><h3><span>📖</span>Cerita Keluarga</h3><div style={{marginBottom:10}}><div style={{display:"flex",gap:5,marginBottom:5}}><select className="fsel" value={sp} onChange={e=>setSp(e.target.value)} style={{width:160,fontSize:10}}><option value="">Cerita umum</option>{pp.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><button className="btn btn-p btn-sm" onClick={addS} disabled={!st.trim()}>Simpan</button></div><textarea className="fta" value={st} onChange={e=>setSt(e.target.value)} placeholder="Tulis cerita, kenangan, pesan..." style={{minHeight:40}}/></div>{!stories.length?<div style={{fontSize:11,color:"var(--t3)",textAlign:"center",padding:16}}>Belum ada cerita</div>:stories.map(s=><div key={s.id} className="st-entry"><div className="st-date">{new Date(s.date).toLocaleDateString("id-ID",{year:"numeric",month:"short",day:"numeric"})}{s.personName&&` · ${s.personName}`}</div><div className="st-text">{s.text}</div><div className="st-author">— {s.author}</div></div>)}</div>
   </div></div>)}
-function Sidebar({p,pp,marriages=[],canEdit,onClose,onEdit,onDel,onSel}){const pa=FE.pa(pp,p);const sps=FE.spouses(pp,p,marriages);const sp=sps[0]||null;const ch=FE.ch(pp,p.id);const sib=FE.sib(pp,p);const g=FE.gen(pp,p.id);const d=FE.desc(pp,p.id);const gl=GL[g]||{l:`Gen ${g+1}`};const age=FE.age(p);const ctx=useMemo(()=>{const c=[];if(pa)c.push(`Anak ${pa.name}`);if(sps.length===1)c.push(`∞ ${sps[0].name}`);else if(sps.length>1)c.push(`∞ ${sps.length} pasangan`);if(ch.length)c.push(`${ch.length} anak`);return c.join(" · ")},[pa,sps,ch]);
+function Sidebar({p,pp,marriages=[],canEdit,onClose,onEdit,onDel,onSel}){const pa=FE.pa(pp,p);const sps=FE.spouses(pp,p,marriages);const sp=sps[0]||null;const ch=FE.chAll(pp,p.id,marriages);const sib=FE.sib(pp,p);const g=FE.gen(pp,p.id);const d=FE.descAll(pp,p.id,marriages);const gl=GL[g]||{l:`Gen ${g+1}`};const age=FE.age(p);const ctx=useMemo(()=>{const c=[];if(pa)c.push(`Anak ${pa.name}`);if(sps.length===1)c.push(`∞ ${sps[0].name}`);else if(sps.length>1)c.push(`∞ ${sps.length} pasangan`);if(ch.length)c.push(`${ch.length} anak`);return c.join(" · ")},[pa,sps,ch]);
   const[showNik,setShowNik]=useState(false);
   return(<div className="sb" onClick={e=>e.stopPropagation()}><div className="sb-h"><h3>Detail</h3><button className="btn btn-icon btn-ghost" onClick={onClose}><Ic.X/></button></div><div className="sb-b"><div className={`sb-av ${p.gender}`}>{ini(p.name)}</div><div className="sb-nm">{p.name}</div><div className="sb-sub">{p.gender==="male"?"♂":"♀"} · {gl.l}{p.deathDate?" · Alm.":""} · {(p.agama||"islam").charAt(0).toUpperCase()+(p.agama||"islam").slice(1)}</div>{ctx&&<div className="sb-ctx">{ctx}</div>}<div className="sb-sec"><div className="sb-sec-t">Info</div>{p.nik&&<div className="sb-row"><span className="sb-row-l">🆔 NIK</span><span className="sb-row-v"><span className="nik-masked" onClick={()=>setShowNik(!showNik)} style={{cursor:"pointer"}} title="Klik untuk tampilkan/sembunyikan">{showNik?NIK.format(p.nik):NIK.mask(p.nik)}</span></span></div>}{p.birthDate&&<div className="sb-row"><span className="sb-row-l">Lahir</span><span className="sb-row-v">{new Date(p.birthDate).toLocaleDateString("id-ID",{year:"numeric",month:"long",day:"numeric"})}</span></div>}{age!==null&&<div className="sb-row"><span className="sb-row-l">Usia</span><span className="sb-row-v">{age} th</span></div>}{p.location?.lat&&<div className="sb-row"><span className="sb-row-l">📍</span><span className="sb-row-v">{p.location.address||`${p.location.lat.toFixed(3)},${p.location.lng.toFixed(3)}`}</span></div>}<div className="sb-row"><span className="sb-row-l">Keturunan</span><span className="sb-row-v">{d}</span></div>{p.notes&&<div className="sb-row"><span className="sb-row-l">Catatan</span><span className="sb-row-v">{p.notes}</span></div>}</div>
     <div className="sb-sec"><div className="sb-sec-t">Hubungan</div>{pa&&<div className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(pa),50)}}><span className="sb-rel-t">PARENT</span>{pa.name}</div>}{sps.map((s,i)=>{const mar=marriages.find(m=>(m.husbandId===p.id&&m.wifeId===s.id)||(m.husbandId===s.id&&m.wifeId===p.id));return<div key={s.id} className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(s),50)}}><span className="sb-rel-t" style={{color:"var(--rose)"}}>{sps.length>1?`ISTRI ${mar?.order||i+1}`:"SPOUSE"}</span>{s.name}</div>})}{sib.map(s=><div key={s.id} className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(s),50)}}><span className="sb-rel-t" style={{color:"var(--purple)"}}>SIBLING</span>{s.name}</div>)}{ch.map(c=><div key={c.id} className="sb-rel" onClick={()=>{onClose();setTimeout(()=>onSel(c),50)}}><span className="sb-rel-t" style={{color:"var(--pri)"}}>CHILD</span>{c.name}</div>)}</div></div>
     {canEdit&&<div className="sb-ft"><button className="btn btn-d btn-sm" onClick={()=>onDel(p.id)}><Ic.Trash/></button><button className="btn btn-p btn-sm" onClick={()=>onEdit(p)}><Ic.Edit/> Edit</button></div>}</div>)}
-function ListView({pp,allPP,onSel,canEdit,fam,onDone,flash}){const people=allPP||pp;
+function ListView({pp,allPP,onSel,canEdit,fam,onDone,flash,myRole}){const people=allPP||pp;
   const[selMode,setSelMode]=useState(false);const[selected,setSelected]=useState(new Set());const[deleting,setDeleting]=useState(false);
+  const[showDelAll,setShowDelAll]=useState(false);const[delAllConfirm,setDelAllConfirm]=useState("");const[delAllBusy,setDelAllBusy]=useState(false);
   const toggle=id=>{setSelected(prev=>{const n=new Set(prev);if(n.has(id))n.delete(id);else n.add(id);return n})};
   const selAll=()=>{if(selected.size===pp.length)setSelected(new Set());else setSelected(new Set(pp.map(p=>p.id)))};
   const bulkDel=async()=>{if(!selected.size||!confirm(`Hapus ${selected.size} orang? Tidak bisa dibatalkan.`))return;setDeleting(true);let ok=0,skip=0;
     for(const id of selected){const ch=FE.ch(pp,id);if(ch.length){skip++;continue}try{await API.deleteMember(fam.id,id);ok++}catch{skip++}}
     setDeleting(false);setSelected(new Set());setSelMode(false);if(onDone)onDone();flash(`${ok} dihapus${skip?`, ${skip} dilewati (punya anak)`:""}`);};
+  const delAll=async()=>{if(delAllConfirm!=="HAPUS")return;setDelAllBusy(true);try{const r=await API.deleteAllMembers(fam.id);flash(r.message);setShowDelAll(false);setDelAllConfirm("");if(onDone)onDone()}catch(e){flash(e.message)}setDelAllBusy(false)};
   const sorted=[...pp].sort((a,b)=>FE.gen(people,a.id)-FE.gen(people,b.id)||a.name.localeCompare(b.name));
+  if(!pp.length)return<div className="lv" style={{justifyContent:"center",alignItems:"center",height:"100%"}}><div style={{textAlign:"center",padding:32,color:"var(--t3)"}}><div style={{fontSize:40,marginBottom:8}}>📋</div><h3 style={{fontFamily:"var(--f-display)",fontSize:16,color:"var(--t2)",marginBottom:4}}>Belum ada anggota</h3><p style={{fontSize:12}}>Tambah anggota dari tab Canvas atau gunakan tombol + di header</p></div></div>;
   return(<div className="lv">
     {canEdit&&<div style={{display:"flex",gap:6,alignItems:"center",padding:"6px 0",marginBottom:4,flexWrap:"wrap"}}>
       <button className="btn btn-sm" onClick={()=>{setSelMode(!selMode);setSelected(new Set())}}>{selMode?"Batal":"Pilih"}</button>
       {selMode&&<><button className="btn btn-sm" onClick={selAll}>{selected.size===pp.length?"Batal Semua":"Pilih Semua"}</button>
       <button className="btn btn-sm btn-d" onClick={bulkDel} disabled={!selected.size||deleting}>{deleting?"Menghapus...":selected.size?`Hapus ${selected.size} Terpilih`:"Hapus"}</button>
       <span style={{fontSize:10,color:"var(--t3)"}}>{selected.size} dipilih</span></>}
+      {myRole==="owner"&&pp.length>0&&<button className="btn btn-sm btn-d" onClick={()=>setShowDelAll(true)} style={{marginLeft:"auto"}}>Hapus Semua ({pp.length})</button>}
     </div>}
     {sorted.map(p=>{const g=FE.gen(people,p.id);const gl=GL[g]||{l:`Gen ${g+1}`};const c=GC[g%GC.length];return<div key={p.id} className="li" onClick={()=>selMode?toggle(p.id):onSel(p)} style={selMode&&selected.has(p.id)?{borderColor:"var(--pri)",background:"rgba(20,184,166,.06)"}:undefined}>
       {selMode&&<input type="checkbox" checked={selected.has(p.id)} onChange={()=>toggle(p.id)} style={{accentColor:"var(--pri)",flexShrink:0}} onClick={e=>e.stopPropagation()}/>}
       <div className={`li-av ${p.gender}`}>{ini(p.name)}</div><div className="li-info"><h4>{p.name}</h4><p>{p.location?.address||p.notes||"—"}</p></div><span className="li-badge" style={{background:c+"18",color:c,border:`1px solid ${c}30`}}>{gl.l}</span></div>})}
+    {showDelAll&&<div className="modal-ov" onClick={()=>{setShowDelAll(false);setDelAllConfirm("")}}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:400}}>
+      <div className="m-hdr"><h2 style={{color:"var(--rose)"}}>Hapus Semua Anggota?</h2><button className="btn btn-icon btn-ghost" onClick={()=>{setShowDelAll(false);setDelAllConfirm("")}}><Ic.X/></button></div>
+      <div className="m-body">
+        <p style={{fontSize:12,lineHeight:1.6,color:"var(--t2)",marginBottom:12}}>Ini akan menghapus <b style={{color:"var(--rose)"}}>{pp.length}</b> anggota keluarga dari silsilah "<b>{fam.name}</b>". Data yang dihapus <b>TIDAK</b> bisa dikembalikan. Canvas positions dan data pernikahan juga akan di-reset.</p>
+        <div className="fg"><label className="fl">Ketik <b>HAPUS</b> untuk konfirmasi:</label><input className="fi" value={delAllConfirm} onChange={e=>setDelAllConfirm(e.target.value)} placeholder="HAPUS" autoFocus style={{borderColor:delAllConfirm==="HAPUS"?"var(--rose)":"var(--bdr)"}}/></div>
+      </div>
+      <div className="m-ftr"><button className="btn" onClick={()=>{setShowDelAll(false);setDelAllConfirm("")}}>Batal</button><button className="btn btn-d" onClick={delAll} disabled={delAllConfirm!=="HAPUS"||delAllBusy}>{delAllBusy?"Menghapus...":"Hapus Semua"}</button></div>
+    </div></div>}
   </div>)}
 function StatsView({pp}){const s=useMemo(()=>FE.stats(pp),[pp]);return<div className="sg">{[{l:"Total",v:s.total,c:"var(--pri)"},{l:"Laki-laki",v:s.males,c:"var(--male-t)"},{l:"Perempuan",v:s.females,c:"var(--fem-t)"},{l:"Hidup",v:s.living,c:"var(--pri)"},{l:"Almarhum",v:s.deceased,c:"var(--t3)"},{l:"Generasi",v:s.generations,c:"var(--warn)"},{l:"Geotagged",v:s.geotagged,c:"var(--orange)"},{l:"Avg Anak",v:s.avgChildren,c:"var(--purple)"}].map((c,i)=><div key={i} className="sc"><div className="sc-v" style={{color:c.c}}>{c.v}</div><div className="sc-l">{c.l}</div></div>)}</div>}
 function TimelineView({pp,onSel}){const ev=useMemo(()=>{const e=[];pp.forEach(p=>{if(p.birthDate)e.push({d:p.birthDate,t:"b",p,l:`Lahir: ${p.name}`});if(p.deathDate)e.push({d:p.deathDate,t:"d",p,l:`Wafat: ${p.name}`})});return e.sort((a,b)=>a.d.localeCompare(b.d))},[pp]);if(!ev.length)return<div className="empty"><h3>Belum ada peristiwa</h3></div>;return<div className="tl">{ev.map((e,i)=><div key={i} className="tl-i" onClick={()=>onSel(e.p)}><div className="tl-dot" style={{background:e.t==="b"?"var(--pri)":"var(--t3)"}}/><div className="tl-yr">{new Date(e.d).toLocaleDateString("id-ID",{year:"numeric",month:"long",day:"numeric"})}</div><div className="tl-tt">{e.l}</div></div>)}</div>}
@@ -1068,13 +1508,18 @@ function FaraidhResultTable({results,total,fmt,label}){
     {totalDist<total-1&&<div style={{fontSize:10,color:"var(--t3)",marginTop:4}}>Sisa: {fmt(total-totalDist)} — baitul mal</div>}
   </div>)}
 function FaraidhCalc({pp,onClose}){
-  const[pid,setPid]=useState("");const[total,setTotal]=useState(1000000000);const[ww,setWw]=useState(false);const[tab,setTab]=useState("faraidh");
+  const[pid,setPid]=useState("");const[ww,setWw]=useState(false);const[tab,setTab]=useState("faraidh");
+  const[assets,setAssets]=useState([{type:'cash',desc:'',value:0}]);
+  const[hutang,setHutang]=useState(0);const[wasiat,setWasiat]=useState(0);const[wakaf,setWakaf]=useState(0);const[zakatOn,setZakatOn]=useState(false);
   const deceased=useMemo(()=>pp.filter(p=>p.deathDate),[pp]);
   const defaultH={husband:0,wife:0,sons:0,daughters:0,father:0,mother:0,grandfather:0,grandmother:0,brothers:0,sisters:0};
   const[h,setH]=useState(defaultH);const[blocked,setBlocked]=useState([]);const[warnings,setWarnings]=useState([]);
   const setHeir=(k,v)=>setH(x=>({...x,[k]:Math.max(0,parseInt(v)||0)}));
   const autoDetect=useCallback((id)=>{if(!id){setH(defaultH);setBlocked([]);setWarnings([]);return}const d=FARAIDH.detectHeirs(pp,id);setH(d.heirs||d);setBlocked(d.blocked||[]);setWarnings(d.warnings||[])},[pp]);
   useEffect(()=>{if(pid)autoDetect(pid)},[pid]);
+  const bruto=assets.reduce((s,a)=>s+a.value,0);
+  const zakatAmt=zakatOn?bruto*0.025:0;
+  const total=Math.max(0,bruto-hutang-wasiat-wakaf-zakatAmt);
   const results=useMemo(()=>FARAIDH.calc(h,total,{blocked,wasiatWajibah:ww}),[h,total,blocked,ww]);
   const fmt=n=>new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",minimumFractionDigits:0}).format(Math.round(n));
   const hasBlocked=blocked.length>0;
@@ -1083,7 +1528,29 @@ function FaraidhCalc({pp,onClose}){
     <div className="far-sel"><label style={{fontSize:11,fontWeight:600}}>Almarhum:</label><select className="fsel" value={pid} onChange={e=>{setPid(e.target.value)}} style={{flex:1,maxWidth:250}}><option value="">— Pilih (opsional) —</option>{deceased.map(p=><option key={p.id} value={p.id}>{p.name} ({p.agama||"islam"})</option>)}</select></div>
     {warnings.length>0&&<div style={{background:"#3f121944",border:"1px solid #5f1d2d",borderRadius:6,padding:"8px 10px",marginBottom:12}}><div style={{fontSize:9,fontWeight:700,color:"var(--rose)",marginBottom:4}}>⚠️ Penghalang Waris Terdeteksi</div>{warnings.map((w,i)=><div key={i} style={{fontSize:10,color:"#fca5a5",lineHeight:1.6}}>• {w}</div>)}</div>}
     {hasBlocked&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"var(--bg2)",border:"1px solid var(--bdr)",borderRadius:6,marginBottom:12}}><label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:11,fontWeight:500}}><input type="checkbox" checked={ww} onChange={e=>setWw(e.target.checked)} style={{accentColor:"var(--pri)"}}/> Hitung Wasiat Wajibah</label><span style={{fontSize:9,color:"var(--t3)"}}>(maks ⅓ harta untuk ahli waris beda agama)</span></div>}
-    <div className="far-total"><label style={{fontSize:11,fontWeight:600}}>Harta Waris:</label><input className="fi" type="number" value={total} onChange={e=>setTotal(Math.max(0,parseInt(e.target.value)||0))} style={{fontFamily:"var(--f-mono)"}}/><span style={{fontSize:10,color:"var(--t3)"}}>{fmt(total)}</span></div>
+    {/* Asset input table */}
+    <div style={{marginTop:12}}>
+      <div style={{fontSize:11,fontWeight:600,marginBottom:6}}>📦 Rincian Harta</div>
+      {assets.map((a,i)=><div key={i} style={{display:"flex",gap:4,marginBottom:4,alignItems:"center"}}>
+        <select className="fsel" value={a.type} onChange={e=>{const n=[...assets];n[i].type=e.target.value;setAssets(n)}} style={{width:100,fontSize:10}}>{ATYP.map(t=><option key={t.id} value={t.id}>{t.i} {t.l}</option>)}</select>
+        <input className="fi" value={a.desc} onChange={e=>{const n=[...assets];n[i].desc=e.target.value;setAssets(n)}} placeholder="Keterangan" style={{flex:1,fontSize:10,padding:"4px 6px"}}/>
+        <input className="fi" type="number" value={a.value||''} onChange={e=>{const n=[...assets];n[i].value=parseFloat(e.target.value)||0;setAssets(n)}} placeholder="Nilai" style={{width:120,fontSize:10,padding:"4px 6px"}}/>
+        <button className="btn btn-icon btn-ghost" onClick={()=>setAssets(assets.filter((_,j)=>j!==i))} style={{fontSize:10,padding:2}}>✕</button>
+      </div>)}
+      <button className="btn btn-sm" onClick={()=>setAssets([...assets,{type:'other',desc:'',value:0}])} style={{fontSize:9,marginTop:4}}>+ Tambah Aset</button>
+      <div style={{marginTop:8,fontSize:11,fontFamily:"var(--f-mono)"}}>
+        <div>Total Bruto: {fmt(bruto)}</div>
+      </div>
+    </div>
+    <div className="fr" style={{marginTop:10}}>
+      <div className="fg"><label className="fl">Hutang</label><input className="fi" type="number" value={hutang||''} onChange={e=>setHutang(parseFloat(e.target.value)||0)}/></div>
+      <div className="fg"><label className="fl">Wasiat (maks 1/3)</label><input className="fi" type="number" value={wasiat||''} onChange={e=>setWasiat(parseFloat(e.target.value)||0)}/></div>
+    </div>
+    <div className="fg"><label className="fl">Wakaf Keluarga</label><input className="fi" type="number" value={wakaf||''} onChange={e=>setWakaf(parseFloat(e.target.value)||0)}/></div>
+    <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,marginBottom:8}}><input type="checkbox" checked={zakatOn} onChange={e=>setZakatOn(e.target.checked)} style={{accentColor:"var(--pri)"}}/> Zakat Maal (2.5% di atas nisab 85 gram emas)</label>
+    <div style={{fontSize:10,fontFamily:"var(--f-mono)",padding:"8px 10px",background:"var(--bg2)",borderRadius:6,marginBottom:12,lineHeight:1.8}}>
+      Bruto: {fmt(bruto)} − Hutang: {fmt(hutang)} − Wasiat: {fmt(wasiat)} − Wakaf: {fmt(wakaf)}{zakatOn?` − Zakat: ${fmt(zakatAmt)}`:''} = <b style={{color:"var(--pri)"}}>Netto: {fmt(total)}</b>
+    </div>
     <div style={{fontSize:10,fontWeight:600,color:"var(--t2)",marginBottom:6}}>Ahli Waris Muslim</div>
     <div className="far-heirs">
       {[{k:"husband",l:"Suami",mx:1},{k:"wife",l:"Istri",mx:4},{k:"sons",l:"Anak Laki-laki",mx:20},{k:"daughters",l:"Anak Perempuan",mx:20},{k:"father",l:"Ayah",mx:1},{k:"mother",l:"Ibu",mx:1},{k:"grandfather",l:"Kakek",mx:1},{k:"grandmother",l:"Nenek",mx:1},{k:"brothers",l:"Saudara Laki-laki",mx:10},{k:"sisters",l:"Saudara Perempuan",mx:10}].map(({k,l,mx})=>
@@ -1104,8 +1571,15 @@ function FaraidhCalc({pp,onClose}){
         <div style={{fontSize:10,color:"var(--t3)",marginBottom:6}}>Sisa harta setelah wasiat: {fmt(total-results.wasiat.total)}</div>
         {results.wasiat.faraidhAdj.length>0&&<FaraidhResultTable results={results.wasiat.faraidhAdj} total={total-results.wasiat.total} fmt={fmt} label="(B) Faraidh setelah Wasiat Wajibah"/>}
       </div>}
-    </div>:results.faraidh&&results.faraidh.length>0?<FaraidhResultTable results={results.faraidh} total={total} fmt={fmt} label="Pembagian Waris"/>:<div style={{textAlign:"center",padding:20,color:"var(--t3)",fontSize:12}}>Tambahkan ahli waris untuk melihat perhitungan</div>}
-    <div style={{marginTop:14,padding:"8px 10px",background:"var(--bg2)",borderRadius:6,fontSize:9,color:"var(--t3)",lineHeight:1.6,fontFamily:"var(--f-mono)"}}>⚖️ Disclaimer: Kalkulator ini menggunakan hukum faraidh dasar + wasiat wajibah (KHI Pasal 209). Untuk kasus kompleks (wasiat, hutang, dll), konsultasikan dengan ahli waris/ulama.</div>
+    </div>:results.faraidh&&results.faraidh.length>0?<div>
+      <FaraidhResultTable results={results.faraidh} total={total} fmt={fmt} label="Pembagian Waris"/>
+      {assets.filter(a=>a.value>0).length>1&&<div style={{marginTop:10}}><div style={{fontSize:10,fontWeight:600,color:"var(--t2)",marginBottom:6}}>📦 Rincian Per Aset</div>
+        <div style={{overflowX:"auto"}}><table className="far-table"><thead><tr><th>Ahli Waris</th>{assets.filter(a=>a.value>0).map((a,i)=><th key={i} style={{fontSize:8}}>{ATYP.find(t=>t.id===a.type)?.i} {a.desc||ATYP.find(t=>t.id===a.type)?.l}</th>)}</tr></thead><tbody>
+          {results.faraidh.map((r,i)=><tr key={i}><td style={{fontSize:10}}>{r.heir} (x{r.count})</td>{assets.filter(a=>a.value>0).map((a,j)=>{const ratio=bruto>0?a.value/bruto:0;const netAsset=ratio*total;return<td key={j} style={{fontFamily:"var(--f-mono)",fontSize:9}}>{fmt(netAsset*r.share/r.count)}/org</td>})}</tr>)}
+        </tbody></table></div>
+      </div>}
+    </div>:<div style={{textAlign:"center",padding:20,color:"var(--t3)",fontSize:12}}>Tambahkan ahli waris untuk melihat perhitungan</div>}
+    <div style={{marginTop:14,padding:"8px 10px",background:"var(--bg2)",borderRadius:6,fontSize:9,color:"var(--t3)",lineHeight:1.6,fontFamily:"var(--f-mono)"}}>⚖️ Disclaimer: Kalkulator ini menggunakan hukum faraidh dasar + wasiat wajibah (KHI Pasal 209). Untuk kasus kompleks, konsultasikan dengan ahli waris/ulama.</div>
   </div></div></div>)}
 // ─── KK IMPORT MODAL ─────────────────────────────────────────
 const KK_HUBUNGAN=["Kepala Keluarga","Istri","Anak","Orang Tua","Mertua","Menantu","Cucu","Famili Lain"];
@@ -1404,6 +1878,272 @@ function IEModal({pp,fam,onDone,onClose,flash}){const[j,setJ]=useState("");const
   </div></div></div>}
 
 // ═══════════════════════════════════════════════════════════════
+// KELUARGA VIEW (Events + Feed + AI)
+// ═══════════════════════════════════════════════════════════════
+function KeluargaView({pp,fam,user,canEdit,flash,marriages}){
+  const[events,setEvents]=useState([]);const[posts,setPosts]=useState([]);
+  const[showEvtForm,setShowEvtForm]=useState(false);const[editEvt,setEditEvt]=useState(null);
+  const[postText,setPostText]=useState("");const[postType,setPostType]=useState("text");
+  const[aiSugBusy,setAiSugBusy]=useState(false);
+  const[showAiSettings,setShowAiSettings]=useState(()=>{const p=localStorage.getItem('nasab-ai-provider')||'groq';return!localStorage.getItem(AI_PROVIDERS[p]?.k||'nasab-groq-key')});
+  const[aiProv,setAiProv]=useState(()=>localStorage.getItem('nasab-ai-provider')||'groq');
+  const[aiKey,setAiKey]=useState(()=>localStorage.getItem(AI_PROVIDERS[localStorage.getItem('nasab-ai-provider')||'groq']?.k||'nasab-groq-key')||'');
+
+  const loadData=async()=>{
+    try{const[e,f]=await Promise.all([API.getEvents(fam.id),API.getFeed(fam.id)]);setEvents(e||[]);setPosts(f||[])}catch{}};
+  useEffect(()=>{loadData()},[fam.id]);
+
+  // Auto feed items
+  const autoFeed=useMemo(()=>{
+    const auto=[];
+    pp.filter(m=>m.birthDate&&!m.deathDate).forEach(m=>{
+      const bd=new Date(m.birthDate),now=new Date(),nx=new Date(now.getFullYear(),bd.getMonth(),bd.getDate());
+      if(nx<now)nx.setFullYear(nx.getFullYear()+1);const days=Math.floor((nx-now)/864e5);
+      if(days>=0&&days<=7)auto.push({id:`auto_bd_${m.id}`,post_type:'auto_birthday',content:days===0?`🎂 Hari ini ulang tahun ${m.name}!`:`🎂 ${days} hari lagi ulang tahun ${m.name}`,created_at:new Date().toISOString(),author_name:'NASAB',isAuto:true})});
+    events.filter(e=>{const d=Math.floor((new Date(e.event_date)-new Date())/864e5);return d>=0&&d<=14}).forEach(e=>{
+      const d=Math.floor((new Date(e.event_date)-new Date())/864e5);const et=EVT.find(t=>t.id===e.type);
+      auto.push({id:`auto_evt_${e.id}`,post_type:'auto_event',content:d===0?`${et?.i||'📅'} Hari ini: ${e.title}!`:`${et?.i||'📅'} ${d} hari lagi: ${e.title}`,created_at:new Date().toISOString(),author_name:'NASAB',isAuto:true})});
+    return auto},[pp,events]);
+
+  const allPosts=[...autoFeed,...posts].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+
+  // Events
+  const saveEvt=async(evt)=>{try{if(editEvt)await API.updateEvent(fam.id,editEvt.id,evt);else await API.createEvent(fam.id,evt);flash(editEvt?"Acara diperbarui":"Acara dibuat");setShowEvtForm(false);setEditEvt(null);loadData()}catch(e){flash(e.message)}};
+  const delEvt=async(eid)=>{if(!confirm("Hapus acara?"))return;try{await API.deleteEvent(fam.id,eid);flash("Acara dihapus");loadData()}catch(e){flash(e.message)}};
+
+  // Posts
+  const submitPost=async()=>{if(!postText.trim())return;try{await API.createPost(fam.id,{content:postText,post_type:postType});setPostText("");flash("Diposting!");loadData()}catch(e){flash(e.message)}};
+  const toggleLike=async(pid)=>{try{await API.toggleLike(pid);loadData()}catch{}};
+  const delPost=async(pid)=>{try{await API.deletePost(fam.id,pid);loadData()}catch(e){flash(e.message)}};
+  const addComment=async(pid,text)=>{if(!text.trim())return;try{await API.addComment(pid,text);loadData()}catch(e){flash(e.message)}};
+
+  // AI
+  const aiSuggest=async()=>{setAiSugBusy(true);try{
+    const bds=FE.bdays(pp,7);const evts=events.filter(e=>Math.floor((new Date(e.event_date)-new Date())/864e5)<=14&&Math.floor((new Date(e.event_date)-new Date())/864e5)>=0);
+    const prompt=`Berdasarkan data keluarga "${fam.name}": ${bds.length?`ulang tahun terdekat: ${bds.map(b=>`${b.person.name} (${b.days} hari)`).join(', ')}.`:'tidak ada ulang tahun dekat.'} ${evts.length?`acara: ${evts.map(e=>e.title).join(', ')}.`:'tidak ada acara.'} Buat posting singkat 1-2 kalimat yang hangat untuk keluarga dalam Bahasa Indonesia.`;
+    const text=await callAI(prompt);setPostText(text)}catch(e){flash("AI: "+e.message)}setAiSugBusy(false)};
+
+  const saveAiSettings=()=>{localStorage.setItem('nasab-ai-provider',aiProv);
+    localStorage.setItem(AI_PROVIDERS[aiProv].k,aiKey);flash("AI settings disimpan");setShowAiSettings(false)};
+
+  const upcomingEvts=events.filter(e=>new Date(e.event_date)>=new Date(new Date().toDateString())).sort((a,b)=>a.event_date.localeCompare(b.event_date));
+
+  return(<div className="kel-view" style={{height:"100%",overflow:"auto"}}>
+    <div style={{maxWidth:700,margin:"0 auto",padding:16}}>
+    {/* AI Settings toggle */}
+    <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
+      <button className="btn btn-sm" onClick={()=>setShowAiSettings(!showAiSettings)} style={{fontSize:10,background:showAiSettings?"var(--pri)":"var(--bg3)",color:showAiSettings?"#000":"var(--t2)"}}>⚙️ AI Settings</button>
+    </div>
+    {showAiSettings&&<div style={{background:"var(--bg2)",border:"1px solid var(--bdr)",borderRadius:8,padding:12,marginBottom:14,fontSize:11}}>
+      <div style={{fontWeight:600,marginBottom:8}}>AI Settings</div>
+      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
+        {Object.entries(AI_PROVIDERS).map(([id,p])=><label key={id}><input type="radio" name="aiprov" checked={aiProv===id} onChange={()=>{setAiProv(id);setAiKey(localStorage.getItem(p.k)||'')}}/> {p.l} <span style={{color:"var(--t3)",fontSize:9}}>({p.d})</span></label>)}
+      </div>
+      <div style={{display:"flex",gap:6}}>
+        <input className="fi" value={aiKey} onChange={e=>setAiKey(e.target.value)} placeholder={`Paste ${AI_PROVIDERS[aiProv]?.l||'API'} Key di sini...`} type="password" style={{flex:1,fontSize:10}}/>
+        <button className="btn btn-p btn-sm" onClick={saveAiSettings}>Simpan</button>
+      </div>
+      <div style={{fontSize:9,color:"var(--t3)",marginTop:4}}>Groq: gratis (Llama 3). Gemini: gratis (Google). Claude: lebih detail. OCR foto KK tetap butuh Claude key.</div>
+    </div>}
+
+    {/* Events section */}
+    <div style={{marginBottom:20}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <h3 style={{fontFamily:"var(--f-display)",fontSize:18}}>📅 Acara</h3>
+        <button className="btn btn-p btn-sm" onClick={()=>{setEditEvt(null);setShowEvtForm(true)}}>+ Acara</button>
+      </div>
+      {!upcomingEvts.length?<div style={{fontSize:11,color:"var(--t3)",textAlign:"center",padding:16,background:"var(--bg2)",borderRadius:8}}>Belum ada acara mendatang</div>:
+      <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:8}}>
+        {upcomingEvts.map(e=>{const et=EVT.find(t=>t.id===e.type)||EVT[EVT.length-1];const dt=new Date(e.event_date);const days=Math.floor((dt-new Date(new Date().toDateString()))/864e5);
+          return<div key={e.id} className="evt-card" onClick={()=>{setEditEvt(e);setShowEvtForm(true)}}>
+            <div style={{fontSize:24}}>{et.i}</div>
+            <div style={{fontWeight:600,fontSize:11}}>{e.title}</div>
+            <div style={{fontSize:9,color:"var(--t3)"}}>{dt.toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"})}{e.event_time?` · ${e.event_time}`:""}</div>
+            <div style={{fontSize:9,color:days===0?"var(--pri)":days<=7?"var(--rose)":"var(--t3)",fontWeight:600,marginTop:4}}>{days===0?"Hari ini!":days===1?"Besok":`${days} hari lagi`}</div>
+            {e.is_public?<div style={{fontSize:8,color:"var(--pri)",marginTop:2}}>🌐 Publik</div>:null}
+          </div>})}
+      </div>}
+    </div>
+
+    {/* Feed section */}
+    <div>
+      <h3 style={{fontFamily:"var(--f-display)",fontSize:18,marginBottom:10}}>📢 Feed Keluarga</h3>
+      {/* Compose box */}
+      <div style={{background:"var(--bg2)",border:"1px solid var(--bdr)",borderRadius:10,padding:12,marginBottom:14}}>
+        <textarea className="fta" value={postText} onChange={e=>setPostText(e.target.value)} placeholder="Tulis untuk keluarga..." style={{minHeight:50,marginBottom:8}}/>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <select className="fsel" value={postType} onChange={e=>setPostType(e.target.value)} style={{width:110,fontSize:10}}>
+            <option value="text">💬 Teks</option><option value="announcement">📢 Pengumuman</option><option value="milestone">🏆 Milestone</option><option value="memory">📸 Kenangan</option>
+          </select>
+          <button className="btn btn-sm" onClick={aiSuggest} disabled={aiSugBusy} style={{fontSize:10}}>{aiSugBusy?"...":"✨ AI"}</button>
+          <div style={{flex:1}}/>
+          <button className="btn btn-p btn-sm" onClick={submitPost} disabled={!postText.trim()}>Kirim</button>
+        </div>
+      </div>
+
+      {/* Posts */}
+      {!allPosts.length?<div style={{fontSize:11,color:"var(--t3)",textAlign:"center",padding:20}}>Belum ada posting</div>:
+      allPosts.map(p=><PostCard key={p.id} post={p} user={user} onLike={toggleLike} onDel={delPost} onComment={addComment} flash={flash}/>)}
+    </div>
+
+    {/* Event form modal */}
+    {showEvtForm&&<EventFormModal evt={editEvt} pp={pp} onSave={saveEvt} onDel={editEvt?()=>delEvt(editEvt.id):null} onClose={()=>{setShowEvtForm(false);setEditEvt(null)}} fam={fam}/>}
+  </div></div>);
+}
+
+// Post card sub-component
+function PostCard({post:p,user,onLike,onDel,onComment,flash}){
+  const[showCmt,setShowCmt]=useState(false);const[cmtText,setCmtText]=useState("");
+  const isAuto=p.isAuto;const isOwner=user&&p.author_id===user.id;
+  const ago=(d)=>{const s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return"baru saja";if(s<3600)return`${Math.floor(s/60)}m`;if(s<86400)return`${Math.floor(s/3600)}j`;return`${Math.floor(s/86400)}h`};
+  const typeIcons={text:'💬',announcement:'📢',milestone:'🏆',memory:'📸',auto_birthday:'🎂',auto_event:'📅'};
+  return(<div className={`feed-post ${isAuto?"auto":""}`}>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+      <div className={`li-av ${isAuto?"":"male"}`} style={{width:28,height:28,fontSize:10,flexShrink:0}}>{isAuto?"🤖":ini(p.author_name||"?")}</div>
+      <div style={{flex:1,minWidth:0}}>
+        <span style={{fontWeight:600,fontSize:11}}>{p.author_name||"Anon"}</span>
+        <span style={{color:"var(--t3)",fontSize:9,marginLeft:6}}>{ago(p.created_at)}</span>
+      </div>
+      <span style={{fontSize:12}}>{typeIcons[p.post_type]||'💬'}</span>
+      {isOwner&&!isAuto&&<button className="btn btn-icon btn-ghost" onClick={()=>onDel(p.id)} style={{fontSize:10,padding:2}} title="Hapus">✕</button>}
+    </div>
+    <div style={{fontSize:12,lineHeight:1.6,color:"var(--t1)",whiteSpace:"pre-wrap"}}>{p.content}</div>
+    {!isAuto&&<div style={{display:"flex",gap:12,marginTop:8,fontSize:10,color:"var(--t3)"}}>
+      <button className="btn-ghost" style={{fontSize:10,color:p.liked_by_me?"var(--rose)":"var(--t3)",cursor:"pointer",background:"none",border:"none"}} onClick={()=>onLike(p.id)}>❤️ {p.like_count||0}</button>
+      <button className="btn-ghost" style={{fontSize:10,color:"var(--t3)",cursor:"pointer",background:"none",border:"none"}} onClick={()=>setShowCmt(!showCmt)}>💬 {p.comments?.length||0}</button>
+    </div>}
+    {showCmt&&!isAuto&&<div style={{marginTop:8,paddingLeft:12,borderLeft:"2px solid var(--bdr)"}}>
+      {(p.comments||[]).map(c=><div key={c.id} style={{fontSize:10,marginBottom:4}}><b>{c.author_name}</b> <span style={{color:"var(--t3)"}}>{ago(c.created_at)}</span><div style={{color:"var(--t2)"}}>{c.content}</div></div>)}
+      <div style={{display:"flex",gap:4,marginTop:4}}><input className="fi" value={cmtText} onChange={e=>setCmtText(e.target.value)} placeholder="Komentar..." style={{flex:1,fontSize:10,padding:"4px 8px"}} onKeyDown={e=>{if(e.key==="Enter"){onComment(p.id,cmtText);setCmtText("")}}}/><button className="btn btn-p btn-sm" style={{fontSize:9}} onClick={()=>{onComment(p.id,cmtText);setCmtText("")}} disabled={!cmtText.trim()}>↵</button></div>
+    </div>}
+  </div>);
+}
+
+// Event form modal
+function EventFormModal({evt,pp,onSave,onDel,onClose,fam}){
+  const[t,setT]=useState(evt?.title||"");const[tp,setTp]=useState(evt?.type||"lainnya");
+  const[dt,setDt]=useState(evt?.event_date||"");const[tm,setTm]=useState(evt?.event_time||"");
+  const[desc,setDesc]=useState(evt?.description||"");const[loc,setLoc]=useState(evt?.location_name||"");
+  const[addr,setAddr]=useState(evt?.location_address||"");const[pub,setPub]=useState(evt?.is_public||false);
+  const[tmpl,setTmpl]=useState(evt?.cover_template||"classic");const[relM,setRelM]=useState(evt?.related_member_id||"");
+  const save=()=>{if(!t.trim()||!dt)return;onSave({title:t,type:tp,description:desc,event_date:dt,event_time:tm,location_name:loc,location_address:addr,is_public:pub?1:0,cover_template:tmpl,related_member_id:relM||null})};
+  return(<div className="modal-ov" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:480}}>
+    <div className="m-hdr"><h2>{evt?"Edit Acara":"Acara Baru"}</h2><button className="btn btn-icon btn-ghost" onClick={onClose}><Ic.X/></button></div>
+    <div className="m-body">
+      <div className="fg"><label className="fl">Judul *</label><input className="fi" value={t} onChange={e=>setT(e.target.value)} placeholder="Pernikahan Ahmad & Fatimah"/></div>
+      <div style={{display:"flex",gap:8}}>
+        <div className="fg" style={{flex:1}}><label className="fl">Tipe</label><select className="fsel" value={tp} onChange={e=>setTp(e.target.value)} style={{width:"100%"}}>{EVT.map(t=><option key={t.id} value={t.id}>{t.i} {t.l}</option>)}</select></div>
+        <div className="fg" style={{flex:1}}><label className="fl">Template</label><select className="fsel" value={tmpl} onChange={e=>setTmpl(e.target.value)} style={{width:"100%"}}><option value="classic">Classic</option><option value="islamic">Islamic</option><option value="modern">Modern</option><option value="festive">Festive</option></select></div>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <div className="fg" style={{flex:1}}><label className="fl">Tanggal *</label><input className="fi" type="date" value={dt} onChange={e=>setDt(e.target.value)}/></div>
+        <div className="fg" style={{flex:1}}><label className="fl">Waktu</label><input className="fi" type="time" value={tm} onChange={e=>setTm(e.target.value)}/></div>
+      </div>
+      <div className="fg"><label className="fl">Lokasi</label><input className="fi" value={loc} onChange={e=>setLoc(e.target.value)} placeholder="Gedung Serbaguna"/></div>
+      <div className="fg"><label className="fl">Alamat</label><input className="fi" value={addr} onChange={e=>setAddr(e.target.value)} placeholder="Jl. Raya No. 1"/></div>
+      <div className="fg"><label className="fl">Deskripsi</label><textarea className="fta" value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Detail acara..." style={{minHeight:40}}/></div>
+      <div className="fg"><label className="fl">Terkait Anggota</label><select className="fsel" value={relM} onChange={e=>setRelM(e.target.value)} style={{width:"100%"}}><option value="">— Tidak ada —</option>{pp.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+      <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,cursor:"pointer"}}><input type="checkbox" checked={pub} onChange={e=>setPub(e.target.checked)} style={{accentColor:"var(--pri)"}}/> Publik (bisa diakses tanpa login untuk undangan)</label>
+    </div>
+    <div className="m-ftr">
+      {onDel&&<button className="btn btn-d btn-sm" onClick={()=>{onDel();onClose()}}>Hapus</button>}
+      <div style={{flex:1}}/>
+      <button className="btn" onClick={onClose}>Batal</button>
+      <button className="btn btn-p" onClick={save} disabled={!t.trim()||!dt}>Simpan</button>
+    </div>
+  </div></div>);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PUBLIC INVITATION PAGE
+// ═══════════════════════════════════════════════════════════════
+function InvitationPage({slug}){
+  const[evt,setEvt]=useState(null);const[loading,setLoading]=useState(true);const[err2,setErr2]=useState("");
+  const[name,setName]=useState("");const[status,setStatus]=useState("hadir");const[msg,setMsg]=useState("");const[sent,setSent]=useState(false);
+  useEffect(()=>{(async()=>{try{const d=await API.getPublicEvent(slug);setEvt(d.event||d)}catch(e){setErr2(e.message)}finally{setLoading(false)}})()},[slug]);
+  const doRsvp=async()=>{if(!name.trim())return;try{await API.rsvp(evt.id,{guest_name:name,status,message:msg});setSent(true)}catch(e){setErr2(e.message)}};
+  const et=evt?EVT.find(t=>t.id===evt.type)||EVT[EVT.length-1]:null;
+  const tmpl=evt?.cover_template||'classic';
+  const tmplStyles={classic:{bg:"linear-gradient(135deg,#1a1a2e,#16213e)",bdr:"#d4af37",accent:"#d4af37",font:"'Instrument Serif',serif"},islamic:{bg:"linear-gradient(135deg,#0a3d2a,#1a5c3a)",bdr:"#c5a55a",accent:"#c5a55a",font:"'Instrument Serif',serif"},modern:{bg:"linear-gradient(135deg,var(--bg0),var(--bg1))",bdr:"var(--pri)",accent:"var(--pri)",font:"'DM Sans',sans-serif"},festive:{bg:"linear-gradient(135deg,#4a0e4e,#2d1b69)",bdr:"#ff6b9d",accent:"#ff6b9d",font:"'DM Sans',sans-serif"}};
+  const ts=tmplStyles[tmpl]||tmplStyles.classic;
+  if(loading)return<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg0)",color:"var(--t1)",fontFamily:"var(--f-body)"}}>Memuat...</div>;
+  if(err2||!evt)return<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg0)",color:"var(--t3)",fontFamily:"var(--f-body)"}}>{err2||"Undangan tidak ditemukan"}</div>;
+  const shareUrl=window.location.href;
+  return(<div style={{minHeight:"100vh",background:ts.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:ts.font}}>
+    <div style={{maxWidth:420,width:"100%",border:`2px solid ${ts.bdr}`,borderRadius:16,padding:"40px 32px",textAlign:"center",color:"#fff",backdropFilter:"blur(10px)",background:"rgba(0,0,0,.2)"}}>
+      {tmpl==='islamic'&&<div style={{fontSize:18,marginBottom:16,opacity:.7}}>بسم الله الرحمن الرحيم</div>}
+      <div style={{fontSize:40,marginBottom:8}}>{et?.i}</div>
+      <div style={{fontSize:12,letterSpacing:3,textTransform:"uppercase",color:ts.accent,marginBottom:8}}>{et?.l}</div>
+      <h1 style={{fontSize:24,fontWeight:700,marginBottom:20}}>{evt.title}</h1>
+      <div style={{fontSize:13,lineHeight:2,marginBottom:20,opacity:.9}}>
+        <div>📅 {new Date(evt.event_date).toLocaleDateString("id-ID",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>
+        {evt.event_time&&<div>🕐 {evt.event_time} WIB</div>}
+        {(evt.location_name||evt.location_address)&&<div>📍 {evt.location_name}{evt.location_address?`, ${evt.location_address}`:""}</div>}
+      </div>
+      {evt.description&&<div style={{fontSize:12,color:"rgba(255,255,255,.7)",marginBottom:20,lineHeight:1.6}}>{evt.description}</div>}
+      {!sent?<div style={{background:"rgba(255,255,255,.1)",borderRadius:12,padding:16,marginBottom:20}}>
+        <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>RSVP</div>
+        <input style={{width:"100%",padding:"8px 12px",background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.2)",borderRadius:6,color:"#fff",fontSize:12,marginBottom:8}} value={name} onChange={e=>setName(e.target.value)} placeholder="Nama Anda"/>
+        <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:8}}>
+          {[{v:"hadir",l:"✅ Hadir"},{v:"tidak",l:"❌ Tidak"},{v:"mungkin",l:"❓ Mungkin"}].map(o=>
+            <button key={o.v} style={{padding:"6px 12px",borderRadius:6,border:`1px solid ${status===o.v?ts.accent:"rgba(255,255,255,.2)"}`,background:status===o.v?"rgba(255,255,255,.15)":"transparent",color:"#fff",cursor:"pointer",fontSize:11}} onClick={()=>setStatus(o.v)}>{o.l}</button>)}
+        </div>
+        <textarea style={{width:"100%",padding:"8px 12px",background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.2)",borderRadius:6,color:"#fff",fontSize:11,minHeight:40,resize:"vertical",marginBottom:8}} value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Pesan (opsional)"/>
+        <button style={{width:"100%",padding:"10px",background:ts.accent,color:"#000",border:"none",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:12}} onClick={doRsvp} disabled={!name.trim()}>Kirim RSVP</button>
+      </div>:<div style={{background:"rgba(255,255,255,.1)",borderRadius:12,padding:16,marginBottom:20,fontSize:13}}>✅ Terima kasih, {name}! RSVP Anda telah tercatat.</div>}
+      {/* Share buttons */}
+      <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:16}}>
+        <button style={{padding:"6px 12px",borderRadius:6,border:"1px solid rgba(255,255,255,.2)",background:"transparent",color:"#fff",cursor:"pointer",fontSize:10}} onClick={()=>{navigator.clipboard?.writeText(shareUrl);alert("Link disalin!")}}>📋 Salin Link</button>
+        <a href={`https://wa.me/?text=${encodeURIComponent(evt.title+" "+shareUrl)}`} target="_blank" rel="noopener" style={{padding:"6px 12px",borderRadius:6,border:"1px solid rgba(255,255,255,.2)",background:"transparent",color:"#fff",cursor:"pointer",fontSize:10,textDecoration:"none"}}>💬 WhatsApp</a>
+      </div>
+      <div style={{fontSize:9,opacity:.5,marginTop:8}}>via NASAB · nasab.biz.id</div>
+    </div>
+  </div>);
+}
+
+// ─── DATA QUALITY MODAL ─────────────────────────────────────
+function DataQualityModal({pp,marriages,onClose,flash}){
+  const issues=useMemo(()=>validateFamilyData(pp,marriages),[pp,marriages]);
+  const[aiReport,setAiReport]=useState("");const[aiBusy,setAiBusy]=useState(false);
+  const crit=issues.filter(i=>i.sev==='critical').length;const warn=issues.filter(i=>i.sev==='warning').length;const info=issues.filter(i=>i.sev==='info').length;
+  const aiAnalyze=async()=>{setAiBusy(true);try{const prompt=`Analisis masalah data silsilah keluarga berikut dan berikan rekomendasi perbaikan dalam Bahasa Indonesia, singkat:\n${issues.slice(0,20).map(i=>`[${i.sev}] ${i.msg}`).join('\n')}`;const r=await callAI(prompt);setAiReport(r)}catch(e){flash("AI: "+e.message)}setAiBusy(false)};
+  const sevC={critical:'#ef4444',warning:'#f59e0b',info:'#3b82f6'};const sevL={critical:'🔴',warning:'🟡',info:'🔵'};
+  return(<div className="modal-ov" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:600,maxHeight:"80vh",overflow:"auto"}}>
+    <div className="m-hdr"><h2>🔍 Kualitas Data</h2><button className="btn btn-icon btn-ghost" onClick={onClose}><Ic.X/></button></div>
+    <div className="m-body">
+      <div style={{display:"flex",gap:12,marginBottom:14,fontSize:12}}>
+        <span style={{color:sevC.critical,fontWeight:600}}>{sevL.critical} {crit} Critical</span>
+        <span style={{color:sevC.warning,fontWeight:600}}>{sevL.warning} {warn} Warning</span>
+        <span style={{color:sevC.info,fontWeight:600}}>{sevL.info} {info} Info</span>
+        <span style={{color:"var(--t3)",marginLeft:"auto"}}>{issues.length} total</span>
+      </div>
+      {!issues.length?<div style={{textAlign:"center",padding:20,color:"var(--pri)",fontSize:13}}>Data terlihat baik!</div>:
+      <div style={{maxHeight:300,overflow:"auto",marginBottom:12}}>{issues.map((is,i)=><div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",padding:"6px 0",borderBottom:"1px solid var(--bdr)",fontSize:11}}>
+        <span style={{flexShrink:0}}>{sevL[is.sev]}</span><span style={{color:"var(--t2)"}}>{is.msg}</span></div>)}</div>}
+      <button className="btn btn-sm" onClick={aiAnalyze} disabled={aiBusy||!issues.length} style={{fontSize:10}}>{aiBusy?"Menganalisis...":"AI Analysis"}</button>
+      {aiReport&&<div style={{marginTop:10,padding:12,background:"var(--bg2)",borderRadius:8,fontSize:11,lineHeight:1.7,color:"var(--t2)",whiteSpace:"pre-wrap"}}>{aiReport}</div>}
+    </div>
+  </div></div>);
+}
+
+// ─── AI CHAT PANEL ──────────────────────────────────────────
+function ChatPanel({pp,fam,marriages,onClose,flash}){
+  const[msgs,setMsgs]=useState([{role:'ai',text:`Hai! Tanya apa saja tentang keluarga ${fam.name}. Contoh: "Siapa yang merantau?" atau "Berapa cucu?"`}]);
+  const[input,setInput]=useState("");const[busy,setBusy]=useState(false);const endRef=useRef(null);
+  useEffect(()=>{endRef.current?.scrollIntoView({behavior:'smooth'})},[msgs]);
+  const send=async()=>{if(!input.trim()||busy)return;const q=input;setInput("");setMsgs(m=>[...m,{role:'user',text:q}]);setBusy(true);
+    try{const summary={name:fam.name,total:pp.length,generations:FE.stats(pp).generations,
+      members:pp.slice(0,50).map(p=>({name:p.name,gender:p.gender,birthDate:p.birthDate,deathDate:p.deathDate,birthPlace:p.birthPlace,location:p.location?.address||'',parentName:pp.find(x=>x.id===p.parentId)?.name||null,spouseNames:FE.spouses(pp,p,marriages).map(s=>s.name),childCount:FE.ch(pp,p.id).length,agama:p.agama}))};
+      const sys=`Kamu adalah asisten silsilah keluarga "${fam.name}" di NASAB. Jawab pertanyaan berdasarkan DATA ini. HANYA jawab dari data — jangan mengarang. Bahasa Indonesia, singkat.\n\nDATA:\n${JSON.stringify(summary)}`;
+      const r=await callAI(q,sys);setMsgs(m=>[...m,{role:'ai',text:r}])}catch(e){setMsgs(m=>[...m,{role:'ai',text:'Error: '+e.message}])}setBusy(false)};
+  return(<div className="chat-panel">
+    <div className="chat-hdr"><span style={{fontWeight:600}}>Tanya AI</span><button className="btn btn-icon btn-ghost" onClick={onClose} style={{fontSize:12}}><Ic.X/></button></div>
+    <div className="chat-body">{msgs.map((m,i)=><div key={i} className={`chat-msg ${m.role}`}><div className="chat-bubble">{m.text}</div></div>)}{busy&&<div className="chat-msg ai"><div className="chat-bubble" style={{opacity:.5}}>Berpikir...</div></div>}<div ref={endRef}/></div>
+    <div className="chat-input"><input value={input} onChange={e=>setInput(e.target.value)} placeholder="Ketik pertanyaan..." onKeyDown={e=>{if(e.key==='Enter')send()}}/><button className="btn btn-p btn-sm" onClick={send} disabled={busy||!input.trim()}>↵</button></div>
+  </div>);
+}
+
+// ═══════════════════════════════════════════════════════════════
 // APP ROOT
 // ═══════════════════════════════════════════════════════════════
 const ThemeCtx=React.createContext({theme:"dark",toggle:()=>{}});
@@ -1418,13 +2158,16 @@ function InstallBanner(){
   return<div className="pwa-banner"><div className="pwa-icon">🌳</div><div className="pwa-text"><b>Install NASAB</b><span>Akses cepat dari home screen</span></div><button className="btn btn-p btn-sm" onClick={install}>Install</button><button className="btn btn-sm btn-ghost" onClick={dismiss} style={{padding:"4px 6px",fontSize:10}}>Nanti</button></div>
 }
 export default function App(){
+  const hash=window.location.hash;
+  if(hash.startsWith('#/undangan/')){const slug=hash.split('/')[2];return<InvitationPage slug={slug}/>}
   const[user,setUser]=useState(null);const[af,setAf]=useState(null);const[adminView,setAdminView]=useState(false);const[loading,setLoading]=useState(true);
+  const[showAuth,setShowAuth]=useState(()=>{const h=window.location.hash;return h==="#/login"||h==="#/register"||h==="#/auth";});
   const[theme,setTheme]=useState(()=>localStorage.getItem("nasab-theme")||"dark");
   useEffect(()=>{document.documentElement.setAttribute("data-theme",theme);localStorage.setItem("nasab-theme",theme);document.querySelector('meta[name="theme-color"]')?.setAttribute("content",theme==="dark"?"#07090e":"#f4f6f9")},[theme]);
   const toggle=useCallback(()=>setTheme(t=>t==="dark"?"light":"dark"),[]);
   useEffect(()=>{(async()=>{if(API.hasSession()){try{const u=await API.me();setUser(u)}catch{API.clearSession()}}setLoading(false)})()},[]);
   const login=async u=>{setUser(u)};
-  const logout=async()=>{setUser(null);setAf(null);setAdminView(false);API.clearSession()};
+  const logout=async()=>{setUser(null);setAf(null);setAdminView(false);setShowAuth(false);API.clearSession()};
   if(loading)return<div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg0)",fontFamily:"var(--f-display)",fontSize:20,color:"var(--t3)"}}>Loading...</div>;
-  return<ThemeCtx.Provider value={{theme,toggle}}><style>{css}</style><InstallBanner/>{!user?<AuthScreen onLogin={login}/>:af?<Workspace family={af} user={user} onBack={()=>setAf(null)}/>:adminView?<AdminPanel user={user} onBack={()=>setAdminView(false)} onSelectFamily={f=>setAf(f)}/>:<Dashboard user={user} onLogout={logout} onSelectFamily={f=>setAf(f)} onCreateFamily={(u,f)=>{setUser(u);setAf(f)}} onAdmin={()=>setAdminView(true)}/>}</ThemeCtx.Provider>;
+  return<ThemeCtx.Provider value={{theme,toggle}}><style>{css}</style><InstallBanner/>{!user?(showAuth?<AuthScreen onLogin={login}/>:<LandingPage onLogin={()=>setShowAuth(true)}/>):af?<Workspace family={af} user={user} onBack={()=>setAf(null)}/>:adminView?<AdminPanel user={user} onBack={()=>setAdminView(false)} onSelectFamily={f=>setAf(f)}/>:<Dashboard user={user} onLogout={logout} onSelectFamily={f=>setAf(f)} onCreateFamily={(u,f)=>{setUser(u);setAf(f)}} onAdmin={()=>setAdminView(true)}/>}</ThemeCtx.Provider>;
 }
