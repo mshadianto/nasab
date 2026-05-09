@@ -2,3 +2,16 @@ node_modules/
 dist/
 .wrangler/
 *.log
+
+# Local cleanup backups (contains DB exports)
+backup/
+*.json.backup
+
+# Claude Code local config
+.claude/
+
+# Personal documents
+pernyataan_hak_cipta.*
+prompt_KK.md
+*.docx
+*.pdf
