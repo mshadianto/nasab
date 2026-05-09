@@ -1,7 +1,7 @@
 {
   "name": "nasab-frontend",
   "private": true,
-  "version": "7.0.0",
+  "version": "8.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,11 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "lucide-react": "^1.7.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
     "@vitejs/plugin-react": "^4.4.0",
+    "tailwindcss": "^4.2.2",
     "vite": "^6.0.0"
   }
 }
