@@ -15,8 +15,23 @@ function corsH(request) {
 }
 
 let _cors = null;// cached per request
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', ..._cors } });
+// Baseline security headers attached to every API response. HSTS / X-Frame
+// keep parity with the frontend `_headers` file so that direct hits to the
+// API hostname don't downgrade the security posture.
+const SECURITY_HEADERS = {
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+};
+// Default cache for API responses is `private, no-store` — D1-backed data
+// is per-user and must never be cached at CDN/proxy. Override per-endpoint
+// (e.g. /api/public/stats uses a short edge cache).
+function json(data, status = 200, cache = 'private, no-store') {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': cache, ...SECURITY_HEADERS, ..._cors },
+  });
 }
 function err(msg, status = 400) { return json({ error: msg }, status); }
 function uid() { return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`; }
@@ -790,7 +805,8 @@ export default {
           DB.prepare('SELECT COUNT(*) as c FROM families').first(),
           DB.prepare('SELECT COUNT(*) as c FROM members').first(),
         ]);
-        return json({ users: u?.c || 0, families: f?.c || 0, members: m?.c || 0 });
+        // Public + slow-moving — let CDN edge cache for 5 min (browser 1 min).
+        return json({ users: u?.c || 0, families: f?.c || 0, members: m?.c || 0 }, 200, 'public, max-age=60, s-maxage=300');
       }
 
       // ── 404 ──
