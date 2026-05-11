@@ -1,4 +1,4 @@
-const CACHE = 'nasab-v27';
+const CACHE = 'nasab-v29';
 const PRECACHE = [
   '/',
   '/manifest.json',
