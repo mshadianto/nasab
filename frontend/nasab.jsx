@@ -1389,6 +1389,36 @@ function Workspace({family:initFam,user,onBack}){
   </div>);
 }
 
+// ─── CANVAS CARD (memoized — skip rerenders during pan/zoom/drag) ─────
+// Props are primitives or stable refs/objects so React.memo's default
+// shallow compare actually saves work. `pos` is shared by reference
+// across renders for non-dragged cards (because the parent uses
+// `{...prev, [draggedId]: new}` spread). On a fresh autoLayout every
+// pos changes → every card re-renders (correct: positions did change).
+const Card=React.memo(function Card({p,pos,gen,branchClass,chCount,isCol,descCount,isBranch,hasParent,isDragging,isSelected,isHighlighted,menuOpen,canEdit,onDragStart,onCardClick,onToggleCollapse,onSwitchPov,onAddClick,onQuickAdd}){
+  const isDec=!!p.deathDate;
+  const yr=p.birthDate?new Date(p.birthDate).getFullYear():null;
+  const age=FE.age(p);
+  const alive=!p.deathDate;
+  const meta=[p.gender==="male"?"♂":"♀",yr?`${yr}`:null,age!==null?`${age} th`:null].filter(Boolean).join(" · ");
+  return(<div className={`cc ${p.gender} ${branchClass} ${isDragging?"dragging":""} ${isSelected?"selected":""} ${isHighlighted?"highlighted":""} ${isDec?"deceased":""}`} style={{left:pos.x,top:pos.y,width:CW,minHeight:CH}} onMouseDown={e=>onDragStart(e,p.id)} onTouchStart={e=>onDragStart(e,p.id)} onClick={e=>onCardClick(e,p)}>
+    <span className="cc-badge-gen">G{gen+1}</span>
+    {p.nik&&<span className="cc-badge-nik">NIK</span>}
+    <div className={`cc-av ${p.gender}`}>{ini(p.name)}<div className="cc-status" style={{background:alive?"#22c55e":"var(--t3)"}}/></div>
+    <div className="cc-nm">{p.name}</div>
+    <div className="cc-mt">{meta}</div>
+    {chCount>0&&<div className="cc-toggle" onClick={e=>{e.stopPropagation();onToggleCollapse(p.id)}} title={isCol?`Tampilkan ${descCount} keturunan`:"Sembunyikan"}>{isCol?`+${descCount}`:"−"}</div>}
+    {isBranch&&<div className="cc-branch" onClick={e=>{e.stopPropagation();onSwitchPov(p.id)}} title={`Lihat keluarga ${p.name}`}>🔗 Cabang →</div>}
+    {canEdit&&<button className="cc-add" onClick={e=>{e.stopPropagation();onAddClick(p.id)}} title="Tambah anggota">+</button>}
+    {menuOpen&&<div className="cc-menu" onClick={e=>e.stopPropagation()}>{[
+      {k:'parent',i:'👆',l:'Orang Tua',dis:hasParent},
+      {k:'spouse',i:'💍',l:'Pasangan',dis:false},
+      {k:'child',i:'👶',l:'Anak',dis:false},
+      {k:'sibling',i:'👥',l:'Saudara',dis:!hasParent},
+    ].map(o=><button key={o.k} className="cc-menu-item" disabled={o.dis} onClick={()=>onQuickAdd(o.k,p)}><span className="cc-menu-icon" style={{borderColor:o.dis?'var(--bdr)':'var(--pri)'}}>{o.i}</span>{o.l}</button>)}</div>}
+  </div>);
+});
+
 // ─── CANVAS ──────────────────────────────────────────────────
 function CanvasView({pp,allPP,marriages=[],onSel,selId,onPos,savedPos,povMode,setPovMode,povBranches=[],effectiveRoot,povHistory=[],switchPov,povBack,setPovRootId,setPovHistory,canEdit,onQuickAdd,onAddMember,onImportKK,onImportGEDCOM}){
   const wr=useRef(null);const[pos,setPos]=useState({});const[pan,setPan]=useState({x:0,y:0});const[zm,setZm]=useState(.5);
@@ -1460,6 +1490,16 @@ function CanvasView({pp,allPP,marriages=[],onSel,selId,onPos,savedPos,povMode,se
   const bnd=useMemo(()=>{let mx=0,my=0;Object.values(pos).forEach(p=>{mx=Math.max(mx,p.x+CW+200);my=Math.max(my,p.y+CH+200)});return{w:Math.max(mx,2000),h:Math.max(my,1200)}},[pos]);
   const gls=useMemo(()=>{const l={};for(const p of pp){const g=FE.gen(pp,p.id);const po=pos[p.id];if(!po)continue;if(!l[g])l[g]={mi:po.y,mx:po.y+CH,minX:po.x};else{if(po.y<l[g].mi)l[g].mi=po.y;if(po.y+CH>l[g].mx)l[g].mx=po.y+CH;if(po.x<l[g].minX)l[g].minX=po.x}}return l},[pp,pos]);
   const cx=e=>e.touches?e.touches[0].clientX:e.clientX;const cy=e=>e.touches?e.touches[0].clientY:e.clientY;
+  // Refs synced with state — let Card callbacks be useCallback([]) stable.
+  // Without these, every render creates new function identities → memo bails.
+  const posRef=useRef(pos);const zmRef=useRef(zm);const didDRef=useRef(didD);
+  const onSelRef=useRef(onSel);const switchPovRef=useRef(switchPov);const onQuickAddRef=useRef(onQuickAdd);
+  useEffect(()=>{posRef.current=pos},[pos]);
+  useEffect(()=>{zmRef.current=zm},[zm]);
+  useEffect(()=>{didDRef.current=didD},[didD]);
+  useEffect(()=>{onSelRef.current=onSel},[onSel]);
+  useEffect(()=>{switchPovRef.current=switchPov},[switchPov]);
+  useEffect(()=>{onQuickAddRef.current=onQuickAdd},[onQuickAdd]);
   const onPS=e=>{if(e.target.closest('.cc')||e.target.closest('.zm')||e.target.closest('.mm'))return;
     // Pinch-to-zoom start
     if(e.touches&&e.touches.length===2){const t=e.touches;const d=Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);pinch.current={d,z:zm,mx:(t[0].clientX+t[1].clientX)/2,my:(t[0].clientY+t[1].clientY)/2};return}
@@ -1469,12 +1509,16 @@ function CanvasView({pp,allPP,marriages=[],onSel,selId,onPos,savedPos,povMode,se
     if(e.touches&&e.touches.length===2&&pinch.current){e.preventDefault();const t=e.touches;const d=Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);const scale=d/pinch.current.d;const nz=Math.max(0.1,Math.min(2.5,pinch.current.z*scale));const mx=pinch.current.mx,my=pinch.current.my;setZm(nz);setPan(prev=>({x:mx-(mx-prev.x)*(nz/zm),y:my-(my-prev.y)*(nz/zm)}));return}
     if(panning){e.preventDefault();setPan({x:ps.current.px+(cx(e)-ps.current.x),y:ps.current.py+(cy(e)-ps.current.y)})}if(drag){e.preventDefault();const dx=(cx(e)-ds.current.x)/zm,dy=(cy(e)-ds.current.y)/zm;if(Math.abs(dx)>3||Math.abs(dy)>3)setDidD(true);setPos(prev=>({...prev,[drag]:{x:ds.current.ox+dx,y:ds.current.oy+dy}}))}};const up=()=>{setPanning(false);setDrag(null);pinch.current=null};window.addEventListener("mousemove",mv);window.addEventListener("mouseup",up);window.addEventListener("touchmove",mv,{passive:false});window.addEventListener("touchend",up);return()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("mouseup",up);window.removeEventListener("touchmove",mv);window.removeEventListener("touchend",up)}});
   useEffect(()=>{const el=wr.current;const wh=e=>{e.preventDefault();const rect=el.getBoundingClientRect();const mx=e.clientX-rect.left,my=e.clientY-rect.top;const dz=e.deltaY>0?-0.06:0.06;setZm(z=>{const nz=Math.max(0.1,Math.min(2.5,z+dz));setPan(p=>({x:mx-(mx-p.x)*(nz/z),y:my-(my-p.y)*(nz/z)}));return nz})};if(el)el.addEventListener("wheel",wh,{passive:false});return()=>el&&el.removeEventListener("wheel",wh)},[]);
-  const dS=(e,pid)=>{e.stopPropagation();setDrag(pid);setDidD(false);ds.current={x:cx(e),y:cy(e),ox:pos[pid].x,oy:pos[pid].y}};
-  const cC=(e,p)=>{e.stopPropagation();if(!didD)onSel(p)};
-  // Double-click/tap: zoom to card
+  // Stable callbacks for Card (memo-friendly — read state via refs)
+  const dS=useCallback((e,pid)=>{e.stopPropagation();setDrag(pid);setDidD(false);const pt=posRef.current[pid];if(!pt)return;ds.current={x:cx(e),y:cy(e),ox:pt.x,oy:pt.y}},[]);
   const lastTap=useRef(0);
-  const dblZoom=useCallback((e,p)=>{const el=wr.current;if(!el)return;const vw=el.clientWidth,vh=el.clientHeight;const pt=pos[p.id];if(!pt)return;const nz=zm<0.5?0.7:zm<0.8?1:0.45;const tcx=pt.x+CW/2,tcy=pt.y+CH/2;setZm(nz);setPan({x:vw/2-tcx*nz,y:vh/2-tcy*nz})},[pos,zm]);
-  const handleCardClick=(e,p)=>{e.stopPropagation();if(didD)return;const now=Date.now();if(now-lastTap.current<350){dblZoom(e,p);lastTap.current=0}else{lastTap.current=now;onSel(p)}};
+  const dblZoom=useCallback((e,p)=>{const el=wr.current;if(!el)return;const vw=el.clientWidth,vh=el.clientHeight;const pt=posRef.current[p.id];if(!pt)return;const z=zmRef.current;const nz=z<0.5?0.7:z<0.8?1:0.45;const tcx=pt.x+CW/2,tcy=pt.y+CH/2;setZm(nz);setPan({x:vw/2-tcx*nz,y:vh/2-tcy*nz})},[]);
+  const handleCardClick=useCallback((e,p)=>{e.stopPropagation();if(didDRef.current)return;const now=Date.now();if(now-lastTap.current<350){dblZoom(e,p);lastTap.current=0}else{lastTap.current=now;onSelRef.current(p)}},[dblZoom]);
+  const stableSwitchPov=useCallback(pid=>switchPovRef.current(pid),[]);
+  const stableQuickAdd=useCallback((kind,person)=>{setCardMenuId(null);onQuickAddRef.current(kind,person)},[]);
+  const onAddClick=useCallback(pid=>setCardMenuId(prev=>prev===pid?null:pid),[]);
+  // POV branch lookup: O(1) Set instead of .some() per card
+  const povBranchSet=useMemo(()=>{const s=new Set();if(povMode)for(const b of povBranches)s.add(b.personId);return s},[povMode,povBranches]);
   const fit=()=>{const a=autoLayout(pp,marriages,collapsed);setPos(a);onPos(a);requestAnimationFrame(()=>fitAll(a))};
   const expandAll=()=>setCollapsed(new Set());
   const collapseAll=()=>{const s=new Set();pp.forEach(p=>{if(FE.ch(pp,p.id).length)s.add(p.id)});setCollapsed(s)};
@@ -1515,7 +1559,9 @@ function CanvasView({pp,allPP,marriages=[],onSel,selId,onPos,savedPos,povMode,se
         if(c.t==="br"){return<line key={i} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--t3)" strokeWidth="1.5" opacity=".9"/>}
         if(c.t==="cd"){const dy=c.y2-c.y1;return<path key={i} d={`M ${c.x1} ${c.y1} C ${c.x1} ${c.y1+dy*0.5}, ${c.x2} ${c.y1+dy*0.5}, ${c.x2} ${c.y2}`} fill="none" stroke="var(--t3)" strokeWidth="1.75" opacity=".9"/>}
         return null})}</svg>
-      {pp.map(p=>{const po=pos[p.id];if(!po)return null;const g=FE.gen(pp,p.id);const c=GC[g%GC.length];const gl=GL[g]||{l:`Gen ${g+1}`};const bd=p.birthDate?new Date(p.birthDate).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}):"";const alive=!p.deathDate;const chCount=FE.ch(pp,p.id).length;const isCol=collapsed.has(p.id);const descCount=isCol?FE.desc(pp,p.id):0;const isBranch=povMode&&povBranches.some(b=>b.personId===p.id);const isDec=!!p.deathDate;const yr=p.birthDate?new Date(p.birthDate).getFullYear():null;const age=FE.age(p);const meta=[p.gender==="male"?"♂":"♀",yr?`${yr}`:null,age!==null?`${age} th`:null].filter(Boolean).join(" · ");return(<div key={p.id} className={`cc ${p.gender} b${branchIdx[rootMap[p.id]]%8} ${drag===p.id?"dragging":""} ${selId===p.id?"selected":""} ${highlightId===p.id?"highlighted":""} ${isDec?"deceased":""}`} style={{left:po.x,top:po.y,width:CW,minHeight:CH}} onMouseDown={e=>dS(e,p.id)} onTouchStart={e=>dS(e,p.id)} onClick={e=>handleCardClick(e,p)}><span className="cc-badge-gen">G{g+1}</span>{p.nik&&<span className="cc-badge-nik">NIK</span>}<div className={`cc-av ${p.gender}`}>{ini(p.name)}<div className="cc-status" style={{background:alive?"#22c55e":"var(--t3)"}}/></div><div className="cc-nm">{p.name}</div><div className="cc-mt">{meta}</div>{chCount>0&&<div className="cc-toggle" onClick={e=>{e.stopPropagation();toggleCollapse(p.id)}} title={isCol?`Tampilkan ${descCount} keturunan`:"Sembunyikan"}>{isCol?`+${descCount}`:"\u2212"}</div>}{isBranch&&<div className="cc-branch" onClick={e=>{e.stopPropagation();switchPov(p.id)}} title={`Lihat keluarga ${p.name}`}>🔗 Cabang →</div>}{canEdit&&<button className="cc-add" onClick={e=>{e.stopPropagation();setCardMenuId(cardMenuId===p.id?null:p.id)}} title="Tambah anggota">+</button>}{cardMenuId===p.id&&<div className="cc-menu" onClick={e=>e.stopPropagation()}>{(()=>{const hasParent=!!p.parentId;const parentCount=p.parentId?1+(pp.find(x=>x.id===p.parentId)?.spouseId?1:0):0;const canAddParent=parentCount<2&&!hasParent;return[{k:'parent',i:'👆',l:'Orang Tua',dis:!canAddParent},{k:'spouse',i:'💍',l:'Pasangan',dis:false},{k:'child',i:'👶',l:'Anak',dis:false},{k:'sibling',i:'👥',l:'Saudara',dis:!p.parentId}].map(o=><button key={o.k} className="cc-menu-item" disabled={o.dis} onClick={()=>{setCardMenuId(null);onQuickAdd(o.k,p)}}><span className="cc-menu-icon" style={{borderColor:o.dis?'var(--bdr)':'var(--pri)'}}>{o.i}</span>{o.l}</button>)})()}</div>}</div>)})}
+      {pp.map(p=>{const po=pos[p.id];if(!po)return null;
+        const g=FE.gen(pp,p.id);const chCount=FE.ch(pp,p.id).length;const isCol=collapsed.has(p.id);
+        return<Card key={p.id} p={p} pos={po} gen={g} branchClass={`b${branchIdx[rootMap[p.id]]%8}`} chCount={chCount} isCol={isCol} descCount={isCol?FE.desc(pp,p.id):0} isBranch={povBranchSet.has(p.id)} hasParent={!!p.parentId} isDragging={drag===p.id} isSelected={selId===p.id} isHighlighted={highlightId===p.id} menuOpen={cardMenuId===p.id} canEdit={canEdit} onDragStart={dS} onCardClick={handleCardClick} onToggleCollapse={toggleCollapse} onSwitchPov={stableSwitchPov} onAddClick={onAddClick} onQuickAdd={stableQuickAdd}/>})}
     </div>
     {/* Zoom + collapse controls */}
     <div className="zm"><button onClick={()=>setZm(z=>Math.min(2.5,z+.12))}>+</button><button onClick={()=>setZm(z=>Math.max(.1,z-.12))}>−</button><button onClick={fit} title="Fit semua"><Ic.Fit/></button><button onClick={()=>comfortView(pos)} title="Zoom nyaman" style={{fontSize:10}}>🏠</button><button onClick={expandAll} title="Buka semua" style={{fontSize:9}}>⬇</button><button onClick={collapseAll} title="Tutup semua" style={{fontSize:9}}>⬆</button><div style={{fontSize:8,textAlign:"center",color:"var(--t3)",fontFamily:"var(--f-mono)"}}>{Math.round(zm*100)}%</div></div>
