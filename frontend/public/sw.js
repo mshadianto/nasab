@@ -7,7 +7,7 @@
 //   - /assets/*  → cache-first (filenames are content-hashed = immutable)
 //   - /api/*     → network-first with offline fallback
 //   - other      → stale-while-revalidate
-const CACHE = 'nasab-v35';
+const CACHE = 'nasab-v36';
 const PRECACHE = [
   '/manifest.json',
   '/icons/icon.svg',
