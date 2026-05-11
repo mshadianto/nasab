@@ -214,6 +214,30 @@ CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_logs(actor_id);
 CREATE INDEX IF NOT EXISTS idx_audit_family ON audit_logs(family_id);
 CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);
 
+-- User secrets (AI API keys, encrypted at rest with AES-GCM, key per provider)
+-- Moves AI keys off browser localStorage to eliminate XSS exfiltration risk.
+CREATE TABLE IF NOT EXISTS user_secrets (
+  user_id TEXT NOT NULL,
+  key_name TEXT NOT NULL,           -- e.g. 'claude_api_key', 'groq_api_key', 'gemini_api_key'
+  encrypted_value TEXT NOT NULL,    -- 'ENC:' prefixed base64(iv|ciphertext)
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, key_name),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- AI usage audit (just metadata — never the prompt body / response)
+CREATE TABLE IF NOT EXISTS ai_usage_log (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  ts TEXT DEFAULT (datetime('now')),
+  ip TEXT DEFAULT '',
+  status INTEGER,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_ai_log_user_ts ON ai_usage_log(user_id, ts DESC);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_members_family ON members(family_id);
 CREATE INDEX IF NOT EXISTS idx_members_parent ON members(parent_id);

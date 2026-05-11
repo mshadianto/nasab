@@ -108,6 +108,33 @@ async function decNIK(enc, env) {
 }
 function maskNIKStr(nik) { return nik && nik.length >= 16 ? nik.slice(0, 4) + '••••••••' + nik.slice(12) : ''; }
 
+// ─── Secret Encryption (AES-GCM) — separate key from NIK ───
+// Used for AI API keys (Claude/Groq/Gemini) so an NIK key compromise
+// doesn't pivot to billing tokens. Falls back to NIK key, then literal.
+async function getSecretKey(env) {
+  const src = env.AI_SECRETS_KEY || env.NIK_ENCRYPTION_KEY || 'nasab-secret-default-32-chars!!!';
+  const raw = new TextEncoder().encode(src.slice(0, 32));
+  return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+async function encSecret(plain, env) {
+  if (!plain) return '';
+  const key = await getSecretKey(env);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plain));
+  const buf = new Uint8Array(12 + ct.byteLength);
+  buf.set(iv); buf.set(new Uint8Array(ct), 12);
+  return 'ENC:' + btoa(String.fromCharCode(...buf));
+}
+async function decSecret(enc, env) {
+  if (!enc || !enc.startsWith('ENC:')) return enc || '';
+  try {
+    const key = await getSecretKey(env);
+    const buf = Uint8Array.from(atob(enc.slice(4)), c => c.charCodeAt(0));
+    const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
+    return new TextDecoder().decode(dec);
+  } catch { return ''; }
+}
+
 // ─── Auth ───────────────────────────────────────────────────
 async function hashPw(pw) {
   const enc = new TextEncoder().encode(pw + 'nasab-salt-2026');
@@ -796,6 +823,92 @@ export default {
       // ── HEALTH ──
       if (path === '/api/health') {
         return json({ status: 'ok', app: 'NASAB API', version: '5.0.0', developer: 'M Sopian Hadianto', org: 'Labbaik AI', timestamp: new Date().toISOString() });
+      }
+
+      // ── USER SECRETS (AI API keys, encrypted at rest) ──
+      // GET   /api/user/secrets        → list provider keys user has set (names only, no values)
+      // PUT   /api/user/secrets        → upsert one key { key_name, value }
+      // DELETE /api/user/secrets/:name → remove one
+      if (path === '/api/user/secrets' && method === 'GET') {
+        const user = await getAuthUser(request, DB, env);
+        if (!user) return err('Unauthorized', 401);
+        const r = await DB.prepare('SELECT key_name, updated_at FROM user_secrets WHERE user_id = ?').bind(user.id).all();
+        return json({ secrets: r.results });
+      }
+      if (path === '/api/user/secrets' && method === 'PUT') {
+        const user = await getAuthUser(request, DB, env);
+        if (!user) return err('Unauthorized', 401);
+        const b = await request.json();
+        const keyName = (b.key_name || '').trim();
+        const value = (b.value || '').trim();
+        // Whitelist of allowed key names — don't let arbitrary writes
+        const ALLOWED_KEYS = ['claude_api_key', 'groq_api_key', 'gemini_api_key'];
+        if (!ALLOWED_KEYS.includes(keyName)) return err('Invalid key_name');
+        if (value.length < 10 || value.length > 500) return err('Invalid value length');
+        const enc = await encSecret(value, env);
+        await DB.prepare(
+          'INSERT INTO user_secrets (user_id, key_name, encrypted_value, updated_at) VALUES (?, ?, ?, datetime(\'now\')) ON CONFLICT(user_id, key_name) DO UPDATE SET encrypted_value=excluded.encrypted_value, updated_at=excluded.updated_at'
+        ).bind(user.id, keyName, enc).run();
+        return json({ ok: true, key_name: keyName });
+      }
+      const secDelMatch = path.match(/^\/api\/user\/secrets\/([a-z_]+)$/);
+      if (secDelMatch && method === 'DELETE') {
+        const user = await getAuthUser(request, DB, env);
+        if (!user) return err('Unauthorized', 401);
+        await DB.prepare('DELETE FROM user_secrets WHERE user_id = ? AND key_name = ?').bind(user.id, secDelMatch[1]).run();
+        return json({ ok: true });
+      }
+
+      // ── AI PROXY ──
+      // POST /api/ai/proxy { provider: 'claude'|'groq'|'gemini', payload: {...provider-specific body} }
+      // Uses user's encrypted key from user_secrets. Streams provider response back.
+      if (path === '/api/ai/proxy' && method === 'POST') {
+        const user = await getAuthUser(request, DB, env);
+        if (!user) return err('Unauthorized', 401);
+
+        let body;
+        try { body = await request.json(); }
+        catch { return err('Invalid JSON'); }
+
+        const provider = body.provider;
+        const payload = body.payload;
+        if (!['claude', 'groq', 'gemini'].includes(provider)) return err('Invalid provider');
+        if (!payload || typeof payload !== 'object') return err('Missing payload');
+
+        const keyName = `${provider}_api_key`;
+        const row = await DB.prepare('SELECT encrypted_value FROM user_secrets WHERE user_id = ? AND key_name = ?').bind(user.id, keyName).first();
+        if (!row) return err(`API key ${provider} belum diset. Set di pengaturan AI.`, 400);
+        const apiKey = await decSecret(row.encrypted_value, env);
+        if (!apiKey) return err('Gagal decrypt API key. Set ulang di pengaturan.', 500);
+
+        // Provider URL + auth header style
+        let url, headers;
+        if (provider === 'claude') {
+          url = 'https://api.anthropic.com/v1/messages';
+          headers = { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' };
+        } else if (provider === 'groq') {
+          url = 'https://api.groq.com/openai/v1/chat/completions';
+          headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
+        } else {
+          // gemini — model in URL path
+          const model = payload.model || 'gemini-1.5-flash-latest';
+          url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+          headers = { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey };
+        }
+
+        const upstream = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
+        const respText = await upstream.text();
+
+        // Audit (metadata only, no prompt/response body)
+        try {
+          await DB.prepare('INSERT INTO ai_usage_log (id, user_id, provider, ip, status) VALUES (?, ?, ?, ?, ?)')
+            .bind('ai_' + uid(), user.id, provider, clientIp(request), upstream.status).run();
+        } catch {}
+
+        return new Response(respText, {
+          status: upstream.status,
+          headers: { 'Content-Type': upstream.headers.get('Content-Type') || 'application/json', 'Cache-Control': 'private, no-store', ...SECURITY_HEADERS, ..._cors },
+        });
       }
 
       // ── PUBLIC STATS (no auth — aggregate counts only) ──

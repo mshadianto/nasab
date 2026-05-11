@@ -156,26 +156,31 @@ const API={
 };
 
 // ─── AI ABSTRACTION ─────────────────────────────────────────
-async function callGroq(prompt,systemPrompt=''){
-  const key=localStorage.getItem('nasab-groq-key');if(!key)throw new Error('Groq API key belum diset');
-  const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[...(systemPrompt?[{role:'system',content:systemPrompt}]:[]),{role:'user',content:prompt}],max_tokens:2000,temperature:0.7})});
-  const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;
-}
-async function callClaude(prompt){
-  const key=localStorage.getItem('nasab-claude-key');if(!key)throw new Error('Claude API key belum diset');
-  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:prompt}]})});
-  const j=await r.json();return j.content?.[0]?.text||'Gagal generate';
-}
-async function callGemini(prompt,systemPrompt=''){
-  const key=localStorage.getItem('nasab-gemini-key');if(!key)throw new Error('Gemini API key belum diset');
-  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:(systemPrompt?systemPrompt+'\n\n':'')+prompt}]}],generationConfig:{maxOutputTokens:2000,temperature:0.7}})});
-  const d=await r.json();if(d.error)throw new Error(d.error.message);return d.candidates?.[0]?.content?.parts?.[0]?.text||'Gagal generate';
-}
+// All AI calls go through Worker proxy at /api/ai/proxy. The user's
+// provider API key is stored encrypted in D1 (server-side) and never
+// crosses the wire after the initial PUT — eliminates the XSS-to-key
+// exfiltration risk that the old localStorage approach had.
 const AI_PROVIDERS={groq:{l:'Groq',k:'nasab-groq-key',d:'Gratis & cepat (Llama 3)'},claude:{l:'Claude',k:'nasab-claude-key',d:'Lebih detail (Anthropic)'},gemini:{l:'Gemini',k:'nasab-gemini-key',d:'Gratis (Google AI)'}};
+async function callAIRaw(provider,payload){
+  if(!API.token)throw new Error('Belum login — masuk dulu untuk pakai AI');
+  const r=await fetch(`${API_URL}/api/ai/proxy`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${API.token}`},body:JSON.stringify({provider,payload})});
+  const d=await r.json();
+  if(!r.ok)throw new Error(d.error||`AI proxy error (${r.status})`);
+  return d;
+}
 async function callAI(prompt,systemPrompt=''){
   const prov=localStorage.getItem('nasab-ai-provider')||'groq';
-  if(prov==='gemini')return callGemini(prompt,systemPrompt);
-  return prov==='claude'?callClaude(prompt):callGroq(prompt,systemPrompt);
+  let payload;
+  if(prov==='groq'){
+    payload={model:'llama-3.3-70b-versatile',messages:[...(systemPrompt?[{role:'system',content:systemPrompt}]:[]),{role:'user',content:prompt}],max_tokens:2000,temperature:0.7};
+    const d=await callAIRaw('groq',payload);return d.choices?.[0]?.message?.content||'Gagal generate';
+  }
+  if(prov==='claude'){
+    payload={model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:(systemPrompt?systemPrompt+'\n\n':'')+prompt}]};
+    const d=await callAIRaw('claude',payload);return d.content?.[0]?.text||'Gagal generate';
+  }
+  payload={model:'gemini-2.0-flash',contents:[{parts:[{text:(systemPrompt?systemPrompt+'\n\n':'')+prompt}]}],generationConfig:{maxOutputTokens:2000,temperature:0.7}};
+  const d=await callAIRaw('gemini',payload);return d.candidates?.[0]?.content?.parts?.[0]?.text||'Gagal generate';
 }
 
 // ─── FAMILY ENGINE ───────────────────────────────────────────
@@ -1715,7 +1720,7 @@ const OCR_PROMPT=`Extract semua data anggota dari foto Kartu Keluarga Indonesia 
 function KKModal({fam,onClose,onDone,flash}){
   const[tab,setTab]=useState("manual");const[noKk,setNoKk]=useState("");const[alamat,setAlamat]=useState("");const[geo,setGeo]=useState(null);
   const[rows,setRows]=useState([{nama:"",nik:"",hubungan:"Kepala Keluarga",jk:"male",tglLahir:"",agama:"islam",statusKawin:"Kawin"}]);
-  const[busy,setBusy]=useState(false);const[ocrBusy,setOcrBusy]=useState(false);const[ocrKey,setOcrKey]=useState(()=>localStorage.getItem("nasab-claude-key")||"");
+  const[busy,setBusy]=useState(false);const[ocrBusy,setOcrBusy]=useState(false);
   const kkProv=useMemo(()=>{if(noKk.length>=2){const pc=parseInt(noKk.slice(0,2));return PROV[pc]||null}return null},[noKk]);
   const addRow=()=>setRows(r=>[...r,{nama:"",nik:"",hubungan:"Anak",jk:"male",tglLahir:"",agama:"islam",statusKawin:"Belum Kawin"}]);
   const delRow=i=>setRows(r=>r.filter((_,j)=>j!==i));
@@ -1723,12 +1728,12 @@ function KKModal({fam,onClose,onDone,flash}){
   const nikFill=(i)=>{const r=rows[i];const d=NIK.parse(r.nik);if(d){setR(i,"jk",d.gender==="male"?"male":"female");setR(i,"tglLahir",d.birthDate)}};
   // Geocode alamat KK
   const geocodeAlamat=async()=>{if(!alamat.trim())return;try{const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(alamat)}&limit=1&countrycodes=id`);const d=await r.json();if(d.length){setGeo({lat:parseFloat(d[0].lat),lng:parseFloat(d[0].lon),address:alamat});flash("Lokasi ditemukan")}else flash("Lokasi tidak ditemukan")}catch{}};
-  // OCR via Claude API
-  const doOcr=async(file)=>{if(!ocrKey.trim()){flash("Masukkan API key Claude terlebih dahulu");return}localStorage.setItem("nasab-claude-key",ocrKey);setOcrBusy(true);
+  // OCR via Claude API (via Worker proxy — uses encrypted claude_api_key
+  // stored server-side, not localStorage)
+  const doOcr=async(file)=>{setOcrBusy(true);
     try{const buf=await file.arrayBuffer();const b64=btoa(String.fromCharCode(...new Uint8Array(buf)));const mt=file.type||"image/jpeg";
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ocrKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:mt,data:b64}},{type:"text",text:OCR_PROMPT}]}]})});
-      const j=await res.json();if(j.error){flash("OCR error: "+j.error.message);setOcrBusy(false);return}
+      const payload={model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:mt,data:b64}},{type:"text",text:OCR_PROMPT}]}]};
+      let j;try{j=await callAIRaw('claude',payload)}catch(e){flash("OCR error: "+e.message);setOcrBusy(false);return}
       const txt=j.content?.[0]?.text||"";const m=txt.match(/\{[\s\S]*\}/);if(!m){flash("Tidak bisa parse hasil OCR");setOcrBusy(false);return}
       const data=JSON.parse(m[0]);
       if(data.no_kk)setNoKk(data.no_kk.replace(/\D/g,""));if(data.alamat)setAlamat(data.alamat);
@@ -1763,7 +1768,7 @@ function KKModal({fam,onClose,onDone,flash}){
     <div style={{fontSize:10,color:"var(--t3)",marginBottom:10,lineHeight:1.6,padding:"6px 8px",background:"var(--bg2)",borderRadius:6}}>Data KK hanya digunakan untuk generate silsilah. Foto KK diproses client-side, tidak disimpan di server. (UU PDP)</div>
     <div style={{display:"flex",gap:4,marginBottom:12}}><button className={`btn btn-sm ${tab==="manual"?"btn-p":""}`} onClick={()=>setTab("manual")}>Input Manual</button><button className={`btn btn-sm ${tab==="ocr"?"btn-p":""}`} onClick={()=>setTab("ocr")}>Upload Foto</button></div>
     {tab==="ocr"&&<div style={{marginBottom:14}}>
-      <div className="fg"><label className="fl">Claude API Key</label><input className="fi" type="password" value={ocrKey} onChange={e=>setOcrKey(e.target.value)} placeholder="sk-ant-..." style={{fontFamily:"var(--f-mono)",fontSize:11}}/><div style={{fontSize:9,color:"var(--t3)",marginTop:3}}>Disimpan di browser. Diperlukan untuk OCR foto KK.</div></div>
+      <div style={{fontSize:10,color:"var(--t3)",marginBottom:8,padding:"6px 8px",background:"var(--bg2)",borderRadius:6,lineHeight:1.5}}>📌 OCR pakai Claude Vision via Worker proxy — set Claude API key dulu di tab <b>Keluarga → Pengaturan AI</b>. Key disimpan terenkripsi di server, bukan di browser.</div>
       <div className="fg"><label className="fl">Foto KK (JPG/PNG)</label><input type="file" accept="image/*" onChange={e=>{const f=e.target.files[0];if(f)doOcr(f)}} style={{fontSize:11}}/></div>
       {ocrBusy&&<div style={{textAlign:"center",padding:20,color:"var(--pri)"}}>Memproses foto... (Claude Vision)</div>}
     </div>}
@@ -2013,9 +2018,15 @@ function KeluargaView({pp,fam,user,canEdit,flash,marriages}){
   const[showEvtForm,setShowEvtForm]=useState(false);const[editEvt,setEditEvt]=useState(null);
   const[postText,setPostText]=useState("");const[postType,setPostType]=useState("text");
   const[aiSugBusy,setAiSugBusy]=useState(false);
-  const[showAiSettings,setShowAiSettings]=useState(()=>{const p=localStorage.getItem('nasab-ai-provider')||'groq';return!localStorage.getItem(AI_PROVIDERS[p]?.k||'nasab-groq-key')});
+  // AI settings — key value never stored client-side after PUT to server.
+  // `serverKeys` tracks which providers user has set on the server (names
+  // only, no values). Toggle defaults open if user has no keys at all.
+  const[showAiSettings,setShowAiSettings]=useState(false);
   const[aiProv,setAiProv]=useState(()=>localStorage.getItem('nasab-ai-provider')||'groq');
-  const[aiKey,setAiKey]=useState(()=>localStorage.getItem(AI_PROVIDERS[localStorage.getItem('nasab-ai-provider')||'groq']?.k||'nasab-groq-key')||'');
+  const[aiKey,setAiKey]=useState('');
+  const[serverKeys,setServerKeys]=useState([]);
+  const[aiSaveBusy,setAiSaveBusy]=useState(false);
+  useEffect(()=>{(async()=>{try{const d=await API._f('/api/user/secrets');const names=(d.secrets||[]).map(s=>s.key_name.replace('_api_key',''));setServerKeys(names);if(!names.length)setShowAiSettings(true)}catch{}})()},[]);
 
   const loadData=async()=>{
     try{const[e,f]=await Promise.all([API.getEvents(fam.id),API.getFeed(fam.id)]);setEvents(e||[]);setPosts(f||[])}catch{}};
@@ -2051,8 +2062,25 @@ function KeluargaView({pp,fam,user,canEdit,flash,marriages}){
     const prompt=`Berdasarkan data keluarga "${fam.name}": ${bds.length?`ulang tahun terdekat: ${bds.map(b=>`${b.person.name} (${b.days} hari)`).join(', ')}.`:'tidak ada ulang tahun dekat.'} ${evts.length?`acara: ${evts.map(e=>e.title).join(', ')}.`:'tidak ada acara.'} Buat posting singkat 1-2 kalimat yang hangat untuk keluarga dalam Bahasa Indonesia.`;
     const text=await callAI(prompt);setPostText(text)}catch(e){flash("AI: "+e.message)}setAiSugBusy(false)};
 
-  const saveAiSettings=()=>{localStorage.setItem('nasab-ai-provider',aiProv);
-    localStorage.setItem(AI_PROVIDERS[aiProv].k,aiKey);flash("AI settings disimpan");setShowAiSettings(false)};
+  const saveAiSettings=async()=>{
+    localStorage.setItem('nasab-ai-provider',aiProv);
+    if(aiKey.trim()){
+      setAiSaveBusy(true);
+      try{
+        await API._f('/api/user/secrets',{method:'PUT',body:JSON.stringify({key_name:`${aiProv}_api_key`,value:aiKey.trim()})});
+        // Cleanup legacy localStorage values (one-time migration)
+        ['nasab-claude-key','nasab-groq-key','nasab-gemini-key'].forEach(k=>localStorage.removeItem(k));
+        setServerKeys(prev=>prev.includes(aiProv)?prev:[...prev,aiProv]);
+        setAiKey('');
+        flash("AI key disimpan terenkripsi di server ✓");
+        setShowAiSettings(false);
+      }catch(e){flash("Gagal simpan key: "+e.message)}
+      setAiSaveBusy(false);
+    }else{
+      flash("Provider dipilih: "+AI_PROVIDERS[aiProv].l);
+      setShowAiSettings(false);
+    }
+  };
 
   const upcomingEvts=events.filter(e=>new Date(e.event_date)>=new Date(new Date().toDateString())).sort((a,b)=>a.event_date.localeCompare(b.event_date));
 
@@ -2063,15 +2091,15 @@ function KeluargaView({pp,fam,user,canEdit,flash,marriages}){
       <button className="btn btn-sm" onClick={()=>setShowAiSettings(!showAiSettings)} style={{fontSize:10,background:showAiSettings?"var(--pri)":"var(--bg3)",color:showAiSettings?"#000":"var(--t2)"}}>⚙️ AI Settings</button>
     </div>
     {showAiSettings&&<div style={{background:"var(--bg2)",border:"1px solid var(--bdr)",borderRadius:8,padding:12,marginBottom:14,fontSize:11}}>
-      <div style={{fontWeight:600,marginBottom:8}}>AI Settings</div>
-      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
-        {Object.entries(AI_PROVIDERS).map(([id,p])=><label key={id}><input type="radio" name="aiprov" checked={aiProv===id} onChange={()=>{setAiProv(id);setAiKey(localStorage.getItem(p.k)||'')}}/> {p.l} <span style={{color:"var(--t3)",fontSize:9}}>({p.d})</span></label>)}
+      <div style={{fontWeight:600,marginBottom:8}}>AI Settings <span style={{fontSize:9,color:"var(--pri)",marginLeft:6}}>🔒 Key terenkripsi di server</span></div>
+      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
+        {Object.entries(AI_PROVIDERS).map(([id,p])=>{const has=serverKeys.includes(id);return<label key={id} style={{display:"flex",alignItems:"center",gap:3}}><input type="radio" name="aiprov" checked={aiProv===id} onChange={()=>{setAiProv(id);setAiKey('')}}/> {p.l} {has&&<span style={{fontSize:9,color:"var(--pri)"}} title="Key sudah diset di server">✓</span>} <span style={{color:"var(--t3)",fontSize:9}}>({p.d})</span></label>})}
       </div>
       <div style={{display:"flex",gap:6}}>
-        <input className="fi" value={aiKey} onChange={e=>setAiKey(e.target.value)} placeholder={`Paste ${AI_PROVIDERS[aiProv]?.l||'API'} Key di sini...`} type="password" style={{flex:1,fontSize:10}}/>
-        <button className="btn btn-p btn-sm" onClick={saveAiSettings}>Simpan</button>
+        <input className="fi" value={aiKey} onChange={e=>setAiKey(e.target.value)} placeholder={serverKeys.includes(aiProv)?`(sudah diset — kosongkan untuk pakai key existing)`:`Paste ${AI_PROVIDERS[aiProv]?.l||'API'} Key...`} type="password" style={{flex:1,fontSize:10}} autoComplete="off"/>
+        <button className="btn btn-p btn-sm" onClick={saveAiSettings} disabled={aiSaveBusy}>{aiSaveBusy?"...":"Simpan"}</button>
       </div>
-      <div style={{fontSize:9,color:"var(--t3)",marginTop:4}}>Groq: gratis (Llama 3). Gemini: gratis (Google). Claude: lebih detail. OCR foto KK tetap butuh Claude key.</div>
+      <div style={{fontSize:9,color:"var(--t3)",marginTop:4,lineHeight:1.5}}>Key di-encrypt server-side (AES-GCM), tidak lagi di browser localStorage. OCR KK juga pakai key Claude ini. Groq: gratis (Llama 3). Gemini: gratis (Google). Claude: detail + vision.</div>
     </div>}
 
     {/* Events section */}
@@ -2291,11 +2319,23 @@ export default function App(){
   const[user,setUser]=useState(null);const[af,setAf]=useState(null);const[adminView,setAdminView]=useState(false);const[loading,setLoading]=useState(true);
   const[showAuth,setShowAuth]=useState(()=>{const h=window.location.hash;return h==="#/login"||h==="#/register"||h==="#/auth";});
   const[theme,setTheme]=useState(()=>localStorage.getItem("nasab-theme")||"dark");
+  // Migration banner — show once if user has legacy localStorage AI keys.
+  // Old keys never get exfiltrated (stay in browser only) but going forward
+  // the new flow stores keys encrypted on the server.
+  const[showAiMigration,setShowAiMigration]=useState(()=>{
+    if(localStorage.getItem('nasab-ai-migration-dismissed'))return false;
+    return!!(localStorage.getItem('nasab-claude-key')||localStorage.getItem('nasab-groq-key')||localStorage.getItem('nasab-gemini-key'));
+  });
+  const dismissAiMigration=()=>{
+    ['nasab-claude-key','nasab-groq-key','nasab-gemini-key'].forEach(k=>localStorage.removeItem(k));
+    localStorage.setItem('nasab-ai-migration-dismissed','1');
+    setShowAiMigration(false);
+  };
   useEffect(()=>{document.documentElement.setAttribute("data-theme",theme);localStorage.setItem("nasab-theme",theme);document.querySelector('meta[name="theme-color"]')?.setAttribute("content",theme==="dark"?"#07090e":"#f4f6f9")},[theme]);
   const toggle=useCallback(()=>setTheme(t=>t==="dark"?"light":"dark"),[]);
   useEffect(()=>{(async()=>{if(API.hasSession()){try{const u=await API.me();setUser(u)}catch{API.clearSession()}}setLoading(false)})()},[]);
   const login=async u=>{setUser(u)};
   const logout=async()=>{setUser(null);setAf(null);setAdminView(false);setShowAuth(false);API.clearSession()};
   if(loading)return<div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg0)",fontFamily:"var(--f-display)",fontSize:20,color:"var(--t3)"}}>Loading...</div>;
-  return<ThemeCtx.Provider value={{theme,toggle}}><style>{css}</style><InstallBanner/>{!user?(showAuth?<AuthScreen onLogin={login}/>:<LandingPage onLogin={()=>setShowAuth(true)}/>):af?<Workspace family={af} user={user} onBack={()=>setAf(null)}/>:adminView?<AdminPanel user={user} onBack={()=>setAdminView(false)} onSelectFamily={f=>setAf(f)}/>:<Dashboard user={user} onLogout={logout} onSelectFamily={f=>setAf(f)} onCreateFamily={(u,f)=>{setUser(u);setAf(f)}} onAdmin={()=>setAdminView(true)}/>}</ThemeCtx.Provider>;
+  return<ThemeCtx.Provider value={{theme,toggle}}><style>{css}</style><InstallBanner/>{user&&showAiMigration&&<div style={{position:"fixed",top:0,left:0,right:0,zIndex:9999,background:"linear-gradient(90deg,var(--warn),var(--orange))",color:"#000",padding:"10px 16px",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",gap:12,boxShadow:"0 2px 8px rgba(0,0,0,.3)",flexWrap:"wrap"}}>🔒 <b>Update keamanan:</b> AI key kamu sekarang disimpan terenkripsi di server. Set ulang via tab <b>Keluarga → AI Settings</b> di salah satu family. <button onClick={dismissAiMigration} style={{marginLeft:8,padding:"4px 10px",border:"1px solid rgba(0,0,0,.4)",borderRadius:4,background:"rgba(0,0,0,.15)",color:"#000",fontSize:11,fontWeight:600,cursor:"pointer"}}>Mengerti, hapus localStorage</button></div>}{!user?(showAuth?<AuthScreen onLogin={login}/>:<LandingPage onLogin={()=>setShowAuth(true)}/>):af?<Workspace family={af} user={user} onBack={()=>setAf(null)}/>:adminView?<AdminPanel user={user} onBack={()=>setAdminView(false)} onSelectFamily={f=>setAf(f)}/>:<Dashboard user={user} onLogout={logout} onSelectFamily={f=>setAf(f)} onCreateFamily={(u,f)=>{setUser(u);setAf(f)}} onAdmin={()=>setAdminView(true)}/>}</ThemeCtx.Provider>;
 }
