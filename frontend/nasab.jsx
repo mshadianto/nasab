@@ -1148,17 +1148,22 @@ function AdminPanel({user,onBack,onSelectFamily}){
 function Dashboard({user,onSelectFamily,onLogout,onCreateFamily,onAdmin}){
   const [fams,setFams]=useState([]);const [show,setShow]=useState(false);const [nn,setNn]=useState("");const [nd,setNd]=useState("");const[opening,setOpening]=useState(null);
   const prefetch=useRef({});
+  // Debounce prefetch — admins see ALL families; un-debounced hover fires
+  // 19+ parallel detail fetches and freezes the main thread. Only prefetch
+  // after sustained hover (250ms) signals genuine intent.
+  const hoverTimer=useRef(null);
   useEffect(()=>{(async()=>{try{setFams(await API.getFamilies())}catch{}})()},[user]);
   const create=async()=>{if(!nn.trim())return;try{const f=await API.createFamily({name:nn,description:nd});const full=await API.getFamily(f.id);onCreateFamily(user,full);setShow(false);setNn("");setNd("")}catch(e){alert(e.message)}};
   const openFam=async f=>{setOpening(f.id);try{const full=prefetch.current[f.id]?await prefetch.current[f.id]:await API.getFamily(f.id);onSelectFamily(full)}catch{onSelectFamily(f)}finally{setOpening(null)}};
-  const hoverFam=f=>{if(!prefetch.current[f.id])prefetch.current[f.id]=API.getFamily(f.id)};
+  const hoverFam=f=>{if(prefetch.current[f.id])return;if(hoverTimer.current)clearTimeout(hoverTimer.current);hoverTimer.current=setTimeout(()=>{prefetch.current[f.id]=API.getFamily(f.id)},250)};
+  const cancelHover=()=>{if(hoverTimer.current){clearTimeout(hoverTimer.current);hoverTimer.current=null}};
   const rc={[RL.OWNER]:{bg:"var(--pri)",c:"#000"},[RL.EDITOR]:{bg:"var(--acc)",c:"#fff"},[RL.VIEWER]:{bg:"var(--bg3)",c:"var(--t2)"}};
   return(<div className="dash">
     <header className="dash-hdr"><h1>NAS<em>AB</em></h1><div className="dash-user">{(user.role==="admin"||user.role==="super_admin")&&<button className="btn btn-sm" onClick={onAdmin} style={{background:"var(--acc)",color:"#fff",fontSize:10,padding:"4px 10px"}}>Admin Panel</button>}<span style={{color:"var(--t3)",fontSize:11}}>Halo,</span><b>{user.name}</b><div className="dash-av">{ini(user.name)}</div><ThemeBtn/><button className="btn btn-sm btn-ghost" onClick={onLogout}>Keluar</button></div></header>
     <div className="dash-body"><div style={{maxWidth:960,margin:"0 auto"}}>
       <div style={{marginBottom:20}}><h2 style={{fontFamily:"var(--f-display)",fontSize:22}}>Silsilah Saya</h2><p style={{fontSize:12,color:"var(--t3)",marginTop:2}}>Kelola pohon keluarga, undang anggota untuk berkolaborasi</p></div>
       <div className="dash-grid">
-        {fams.map(f=>{const r=rc[f.myRole]||rc.viewer;return(<div key={f.id} className="fam-card" onClick={()=>openFam(f)} onMouseEnter={()=>hoverFam(f)} onTouchStart={()=>hoverFam(f)}>{opening===f.id&&<div style={{position:"absolute",inset:0,background:"rgba(7,9,14,.7)",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:"var(--r)",zIndex:5,fontSize:11,color:"var(--pri)"}}>Memuat...</div>}<div className="fam-card-bar"/><span className="fam-card-role" style={{background:r.bg,color:r.c}}>{f.myRole}</span><h3>{f.name}</h3><p>{f.description||"Silsilah keluarga"}</p><div className="fam-card-stats"><span>👥 {f.member_count||f.members?.length||0}</span><span>📍 {f.geo_count||(f.members||[]).filter(m=>m.location?.lat).length||0}</span></div></div>)})}
+        {fams.map(f=>{const r=rc[f.myRole]||rc.viewer;return(<div key={f.id} className="fam-card" onClick={()=>openFam(f)} onMouseEnter={()=>hoverFam(f)} onMouseLeave={cancelHover}>{opening===f.id&&<div style={{position:"absolute",inset:0,background:"rgba(7,9,14,.7)",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:"var(--r)",zIndex:5,fontSize:11,color:"var(--pri)"}}>Memuat...</div>}<div className="fam-card-bar"/><span className="fam-card-role" style={{background:r.bg,color:r.c}}>{f.myRole}</span><h3>{f.name}</h3><p>{f.description||"Silsilah keluarga"}</p><div className="fam-card-stats"><span>👥 {f.member_count||f.members?.length||0}</span><span>📍 {f.geo_count||(f.members||[]).filter(m=>m.location?.lat).length||0}</span></div></div>)})}
         <div className="fam-card fam-new" onClick={()=>setShow(true)}><span style={{fontSize:24,color:"var(--pri)"}}>+</span><span style={{fontSize:12,fontWeight:600}}>Buat Silsilah Baru</span></div>
       </div>
     </div><DevFooter/></div>
