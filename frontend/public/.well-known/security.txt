@@ -1,0 +1,5 @@
+Contact: mailto:sopian.hadianto@gmail.com
+Expires: 2027-05-11T00:00:00.000Z
+Preferred-Languages: id, en
+Canonical: https://nasab.biz.id/.well-known/security.txt
+Policy: https://nasab.biz.id/.well-known/security-policy
