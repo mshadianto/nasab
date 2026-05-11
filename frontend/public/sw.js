@@ -1,4 +1,4 @@
-const CACHE = 'nasab-v30';
+const CACHE = 'nasab-v31';
 const PRECACHE = [
   '/',
   '/manifest.json',
@@ -44,6 +44,11 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
+
+  // Cache API only supports GET — bail early for any non-GET so we don't
+  // attempt cache.put() on POST/PUT/DELETE (throws TypeError, leaks unhandled
+  // promise rejections, can corrupt SW state).
+  if (e.request.method !== 'GET') return;
 
   // CDN resources (fonts, leaflet): cache-first
   if (CDN_CACHE.some(cdn => url.href.startsWith(cdn))) {
