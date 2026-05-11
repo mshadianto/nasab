@@ -178,24 +178,46 @@ async function callAI(prompt,systemPrompt=''){
   return prov==='claude'?callClaude(prompt):callGroq(prompt,systemPrompt);
 }
 
+// ─── INDEX CACHE (perf) ─────────────────────────────────────
+// WeakMap keyed by pp identity — React creates a new array on state change, so
+// the cache auto-invalidates. Builds byId / byParent in one O(n) pass; gen/desc
+// memoize per id. Turns the hot lookups from O(n)/O(depth·n) into O(1)/O(depth).
+const _pIdx=new WeakMap();
+function _idx(pp){let i=_pIdx.get(pp);if(i)return i;
+  const byId=new Map(),byParent=new Map();
+  for(const p of pp){byId.set(p.id,p);if(p.parentId){let a=byParent.get(p.parentId);if(!a){a=[];byParent.set(p.parentId,a)}a.push(p)}}
+  i={byId,byParent,gen:new Map(),desc:new Map(),descAll:new WeakMap()};
+  _pIdx.set(pp,i);return i}
+const EMPTY=[];
+
 // ─── FAMILY ENGINE ───────────────────────────────────────────
 const FE={
-  ch:(pp,pid)=>pp.filter(p=>p.parentId===pid),
+  ch:(pp,pid)=>_idx(pp).byParent.get(pid)||EMPTY,
   // chAll: includes spouse's children (for display/counting, NOT layout)
-  chAll:(pp,pid,marriages)=>{const direct=pp.filter(p=>p.parentId===pid);if(direct.length)return direct;
-    const person=pp.find(p=>p.id===pid);if(!person)return[];
-    if(person.spouseId){const sc=pp.filter(p=>p.parentId===person.spouseId);if(sc.length)return sc}
-    if(marriages){const ms=marriages.filter(m=>m.husbandId===pid||m.wifeId===pid);for(const mr of ms){const pid2=mr.husbandId===pid?mr.wifeId:mr.husbandId;const mc=pp.filter(p=>p.parentId===pid2);if(mc.length)return mc}}
-    return[]},
-  sp:(pp,p)=>p.spouseId?pp.find(x=>x.id===p.spouseId)||null:null,
+  chAll:(pp,pid,marriages)=>{const i=_idx(pp);const direct=i.byParent.get(pid);if(direct&&direct.length)return direct;
+    const person=i.byId.get(pid);if(!person)return EMPTY;
+    if(person.spouseId){const sc=i.byParent.get(person.spouseId);if(sc&&sc.length)return sc}
+    if(marriages){for(const mr of marriages){if(mr.husbandId!==pid&&mr.wifeId!==pid)continue;const pid2=mr.husbandId===pid?mr.wifeId:mr.husbandId;const mc=i.byParent.get(pid2);if(mc&&mc.length)return mc}}
+    return EMPTY},
+  sp:(pp,p)=>p.spouseId?_idx(pp).byId.get(p.spouseId)||null:null,
   // All spouses via marriages table (polygamy). Falls back to spouseId if no marriages.
-  spouses:(pp,p,marriages=[])=>{const ms=marriages.filter(m=>m.husbandId===p.id||m.wifeId===p.id);if(ms.length){const sids=[...new Set(ms.map(m=>m.husbandId===p.id?m.wifeId:m.husbandId))];return sids.map(sid=>pp.find(x=>x.id===sid)).filter(Boolean)}return p.spouseId?[pp.find(x=>x.id===p.spouseId)].filter(Boolean):[]},
-  pa:(pp,p)=>p.parentId?pp.find(x=>x.id===p.parentId)||null:null,
-  sib:(pp,p)=>p.parentId?pp.filter(x=>x.parentId===p.parentId&&x.id!==p.id):[],
-  roots:(pp,marriages=[])=>pp.filter(p=>!p.parentId&&!pp.some(x=>x.spouseId===p.id&&x.parentId)&&!marriages.some(m=>m.wifeId===p.id&&pp.find(h=>h.id===m.husbandId)?.parentId)),
-  gen:(pp,pid,g=0)=>{const p=pp.find(x=>x.id===pid);return(!p||!p.parentId)?g:FE.gen(pp,p.parentId,g+1)},
-  desc:(pp,pid)=>{const c=FE.ch(pp,pid);return c.reduce((s,x)=>s+1+FE.desc(pp,x.id),0)},
-  descAll:(pp,pid,marriages)=>{const c=FE.chAll(pp,pid,marriages);return c.reduce((s,x)=>s+1+FE.descAll(pp,x.id,marriages),0)},
+  spouses:(pp,p,marriages=[])=>{const i=_idx(pp);const sids=[];for(const m of marriages){if(m.husbandId===p.id)sids.push(m.wifeId);else if(m.wifeId===p.id)sids.push(m.husbandId)}
+    if(sids.length){const uniq=[...new Set(sids)];return uniq.map(sid=>i.byId.get(sid)).filter(Boolean)}
+    return p.spouseId?[i.byId.get(p.spouseId)].filter(Boolean):EMPTY},
+  pa:(pp,p)=>p.parentId?_idx(pp).byId.get(p.parentId)||null:null,
+  sib:(pp,p)=>{if(!p.parentId)return EMPTY;const sibs=_idx(pp).byParent.get(p.parentId);return sibs?sibs.filter(x=>x.id!==p.id):EMPTY},
+  roots:(pp,marriages=[])=>{const i=_idx(pp);return pp.filter(p=>!p.parentId&&!pp.some(x=>x.spouseId===p.id&&x.parentId)&&!marriages.some(m=>m.wifeId===p.id&&i.byId.get(m.husbandId)?.parentId))},
+  gen:(pp,pid)=>{const i=_idx(pp);const c=i.gen;if(c.has(pid))return c.get(pid);
+    let cur=i.byId.get(pid),d=0;while(cur&&cur.parentId){d++;cur=i.byId.get(cur.parentId)}
+    c.set(pid,d);return d},
+  desc:(pp,pid)=>{const i=_idx(pp);const c=i.desc;if(c.has(pid))return c.get(pid);
+    const ch=i.byParent.get(pid)||EMPTY;let r=0;for(const x of ch)r+=1+FE.desc(pp,x.id);
+    c.set(pid,r);return r},
+  descAll:(pp,pid,marriages)=>{const i=_idx(pp);const key=marriages||i;let m=i.descAll.get(key);if(!m){m=new Map();i.descAll.set(key,m)}
+    if(m.has(pid))return m.get(pid);
+    m.set(pid,0); // guard against cycles
+    const ch=FE.chAll(pp,pid,marriages);let r=0;for(const x of ch)r+=1+FE.descAll(pp,x.id,marriages);
+    m.set(pid,r);return r},
   age:(p)=>{if(!p.birthDate)return null;const b=new Date(p.birthDate),e=p.deathDate?new Date(p.deathDate):new Date();let a=e.getFullYear()-b.getFullYear();if(e.getMonth()<b.getMonth()||(e.getMonth()===b.getMonth()&&e.getDate()<b.getDate()))a--;return a},
   stats:(pp)=>{const t=pp.length,m=pp.filter(p=>p.gender==="male").length,f=t-m,lv=pp.filter(p=>!p.deathDate).length;const mg=Math.max(0,...pp.map(p=>FE.gen(pp,p.id)));const pr=pp.filter(p=>FE.ch(pp,p.id).length>0);const ac=pr.length?(pr.reduce((s,p)=>s+FE.ch(pp,p.id).length,0)/pr.length).toFixed(1):0;const geo=pp.filter(p=>p.location?.lat).length;return{total:t,males:m,females:f,living:lv,deceased:t-lv,generations:mg+1,avgChildren:ac,geotagged:geo}},
   search:(pp,q)=>{const s=q.toLowerCase().trim();return!s?pp:pp.filter(p=>p.name.toLowerCase().includes(s)||(p.birthPlace||"").toLowerCase().includes(s)||(p.notes||"").toLowerCase().includes(s))},
@@ -234,91 +256,111 @@ function validateFamilyData(pp,marriages){
 // ─── POV TREE (MyHeritage-style branch navigation) ──────────
 // Descendants of root, including children co-parented via a spouse (parent_id points to spouse)
 function bloodDescendants(pp,rootId,marriages=[]){
-  const desc=new Set();const q=[rootId];
+  const ix=_idx(pp);const desc=new Set();const q=[rootId];
   while(q.length){const id=q.shift();if(desc.has(id))continue;desc.add(id);
-    FE.ch(pp,id).forEach(c=>q.push(c.id));
+    const dir=ix.byParent.get(id);if(dir)for(const c of dir)q.push(c.id);
     // Children via co-parent (spouse): their parent_id may point to spouse, not this person
-    marriages.filter(m=>m.husbandId===id||m.wifeId===id).forEach(m=>{
+    for(const m of marriages){if(m.husbandId!==id&&m.wifeId!==id)continue;
       const sid=m.husbandId===id?m.wifeId:m.husbandId;
-      FE.ch(pp,sid).forEach(c=>q.push(c.id))});
-    const p=pp.find(x=>x.id===id);if(p?.spouseId)FE.ch(pp,p.spouseId).forEach(c=>q.push(c.id));
+      const sc=ix.byParent.get(sid);if(sc)for(const c of sc)q.push(c.id)}
+    const p=ix.byId.get(id);if(p?.spouseId){const sc=ix.byParent.get(p.spouseId);if(sc)for(const c of sc)q.push(c.id)}
   }
   desc.delete(rootId);return desc;
 }
 function isBloodRelative(pp,personId,rootId,marriages=[]){
   if(personId===rootId)return true;
+  const ix=_idx(pp);
   // Root's ancestor chain
   const rootAnc=new Set();let cur=rootId;
-  while(cur){rootAnc.add(cur);const p=pp.find(x=>x.id===cur);cur=p?.parentId||null}
+  while(cur){rootAnc.add(cur);cur=ix.byId.get(cur)?.parentId||null}
   // Person or any of their ancestors in root's ancestry → blood relative
-  cur=personId;while(cur){if(rootAnc.has(cur))return true;const p=pp.find(x=>x.id===cur);cur=p?.parentId||null}
+  cur=personId;while(cur){if(rootAnc.has(cur))return true;cur=ix.byId.get(cur)?.parentId||null}
   // Person is descendant of root (including co-parented via spouse)
   return bloodDescendants(pp,rootId,marriages).has(personId);
 }
 function getPOVMembers(pp,rootId,marriages=[]){
-  const root=pp.find(p=>p.id===rootId);
+  const ix=_idx(pp);const root=ix.byId.get(rootId);
   if(!root)return{visible:pp,branches:[]};
-  const vis=new Set([rootId]);const branches=[];
-  const addBranch=(sid)=>{if(!isBloodRelative(pp,sid,rootId,marriages)&&!branches.some(b=>b.personId===sid)){
-    const sp=pp.find(x=>x.id===sid);if(sp)branches.push({personId:sid,name:sp.name})}};
+  const vis=new Set([rootId]);const branches=[];const branchSet=new Set();
+  // Pre-compute blood set once instead of recomputing inside addBranch
+  const bloodSet=bloodDescendants(pp,rootId,marriages);bloodSet.add(rootId);
+  {let cur=rootId;while(cur){bloodSet.add(cur);cur=ix.byId.get(cur)?.parentId||null}}
+  const addBranch=(sid)=>{if(bloodSet.has(sid)||branchSet.has(sid))return;
+    const sp=ix.byId.get(sid);if(sp){branchSet.add(sid);branches.push({personId:sid,name:sp.name})}};
   // Ancestors upward (include each ancestor's spouses)
-  const addAnc=pid=>{const p=pp.find(x=>x.id===pid);if(!p)return;if(p.parentId){vis.add(p.parentId);
-    const par=pp.find(x=>x.id===p.parentId);if(par)FE.spouses(pp,par,marriages).forEach(s=>vis.add(s.id));
+  const addAnc=pid=>{const p=ix.byId.get(pid);if(!p)return;if(p.parentId){vis.add(p.parentId);
+    const par=ix.byId.get(p.parentId);if(par)for(const s of FE.spouses(pp,par,marriages))vis.add(s.id);
     addAnc(p.parentId)}};
   addAnc(rootId);
   // Descendants downward — traverse direct children AND children co-parented via spouses
   const seen=new Set();
   const addDesc=pid=>{if(seen.has(pid))return;seen.add(pid);
-    const person=pp.find(x=>x.id===pid);
+    const person=ix.byId.get(pid);
     const kids=new Map();
-    FE.ch(pp,pid).forEach(c=>kids.set(c.id,c));
-    marriages.filter(m=>m.husbandId===pid||m.wifeId===pid).forEach(m=>{
+    const dir=ix.byParent.get(pid);if(dir)for(const c of dir)kids.set(c.id,c);
+    for(const m of marriages){if(m.husbandId!==pid&&m.wifeId!==pid)continue;
       const sid=m.husbandId===pid?m.wifeId:m.husbandId;vis.add(sid);addBranch(sid);
-      FE.ch(pp,sid).forEach(c=>kids.set(c.id,c))});
+      const sc=ix.byParent.get(sid);if(sc)for(const c of sc)kids.set(c.id,c)}
     if(person?.spouseId){vis.add(person.spouseId);addBranch(person.spouseId);
-      FE.ch(pp,person.spouseId).forEach(c=>kids.set(c.id,c))}
+      const sc=ix.byParent.get(person.spouseId);if(sc)for(const c of sc)kids.set(c.id,c)}
     kids.forEach(child=>{vis.add(child.id);
-      FE.spouses(pp,child,marriages).forEach(s=>{vis.add(s.id);addBranch(s.id)});
+      for(const s of FE.spouses(pp,child,marriages)){vis.add(s.id);addBranch(s.id)}
       addDesc(child.id)});
   };
   addDesc(rootId);
   // Root's spouses (redundant with addDesc but kept for the branch-label path)
-  FE.spouses(pp,root,marriages).forEach(s=>{vis.add(s.id);addBranch(s.id)});
+  for(const s of FE.spouses(pp,root,marriages)){vis.add(s.id);addBranch(s.id)}
   // Root's siblings + their descendants
-  FE.sib(pp,root).forEach(s=>{vis.add(s.id);addDesc(s.id)});
+  for(const s of FE.sib(pp,root))(vis.add(s.id),addDesc(s.id));
   return{visible:pp.filter(p=>vis.has(p.id)),branches};
 }
 
 // ─── LAYOUT / CONNECTORS ─────────────────────────────────────
 const MAX_COLS=4; // wrap siblings after this many
-function autoLayout(pp,marriages=[],collapsed=new Set()){const roots=FE.roots(pp,marriages);const pos={};const HGAP=GX+8;
-  function isVis(pid){let cur=pp.find(x=>x.id===pid);while(cur&&cur.parentId){if(collapsed.has(cur.parentId))return false;cur=pp.find(x=>x.id===cur.parentId)}return true}
+function autoLayout(pp,marriages=[],collapsed=new Set()){const ix=_idx(pp);const roots=FE.roots(pp,marriages);const pos={};const HGAP=GX+8;
+  // isVis: memoized walk up parent chain checking collapse state
+  const visC=new Map();
+  function isVis(pid){if(visC.has(pid))return visC.get(pid);
+    let cur=ix.byId.get(pid),v=true;
+    while(cur&&cur.parentId){if(collapsed.has(cur.parentId)){v=false;break}cur=ix.byId.get(cur.parentId)}
+    visC.set(pid,v);return v}
+  // Visible children (cached so we don't recompute the filter in stW/stH/place)
+  const vChC=new Map();
+  function vCh(pid){if(vChC.has(pid))return vChC.get(pid);
+    const ch=collapsed.has(pid)?EMPTY:(ix.byParent.get(pid)||EMPTY);
+    const r=ch.length?ch.filter(c=>isVis(c.id)):EMPTY;
+    vChC.set(pid,r);return r}
   // Width of person card + spouse cards
-  function unitW(pid){const p=pp.find(x=>x.id===pid);if(!p)return CW;return CW+FE.spouses(pp,p,marriages).length*(CW+CG)}
+  function unitW(pid){const p=ix.byId.get(pid);if(!p)return CW;return CW+FE.spouses(pp,p,marriages).length*(CW+CG)}
   // Cached subtree width (horizontal) and height (generation rows)
   const wC={},hC={};
-  function stW(pid){if(wC[pid]!=null)return wC[pid];const ch=(collapsed.has(pid)?[]:FE.ch(pp,pid)).filter(c=>isVis(c.id));const uw=unitW(pid);
-    if(!ch.length)return(wC[pid]=uw);const rows=[];for(let i=0;i<ch.length;i+=MAX_COLS)rows.push(ch.slice(i,i+MAX_COLS));
-    let maxRW=0;rows.forEach(row=>{maxRW=Math.max(maxRW,row.reduce((s,c,i)=>s+(i?HGAP:0)+stW(c.id),0))});return(wC[pid]=Math.max(uw,maxRW))}
-  function stH(pid){if(hC[pid]!=null)return hC[pid];const ch=(collapsed.has(pid)?[]:FE.ch(pp,pid)).filter(c=>isVis(c.id));
-    if(!ch.length)return(hC[pid]=1);const rows=[];for(let i=0;i<ch.length;i+=MAX_COLS)rows.push(ch.slice(i,i+MAX_COLS));
-    let h=0;rows.forEach(row=>{h+=Math.max(...row.map(c=>stH(c.id)))});return(hC[pid]=1+h)}
+  function stW(pid){if(wC[pid]!=null)return wC[pid];const ch=vCh(pid);const uw=unitW(pid);
+    if(!ch.length)return(wC[pid]=uw);
+    let maxRW=0;for(let i=0;i<ch.length;i+=MAX_COLS){let rw=0;const end=Math.min(i+MAX_COLS,ch.length);for(let j=i;j<end;j++){if(j>i)rw+=HGAP;rw+=stW(ch[j].id)}if(rw>maxRW)maxRW=rw}
+    return(wC[pid]=Math.max(uw,maxRW))}
+  function stH(pid){if(hC[pid]!=null)return hC[pid];const ch=vCh(pid);
+    if(!ch.length)return(hC[pid]=1);
+    let h=0;for(let i=0;i<ch.length;i+=MAX_COLS){const end=Math.min(i+MAX_COLS,ch.length);let rh=0;for(let j=i;j<end;j++){const v=stH(ch[j].id);if(v>rh)rh=v}h+=rh}
+    return(hC[pid]=1+h)}
   // Top-down absolute positioning — no shift() needed
-  function place(pid,x,d){const p=pp.find(z=>z.id===pid);if(!p||pos[pid])return;
-    const ch=(collapsed.has(pid)?[]:FE.ch(pp,pid)).filter(c=>isVis(c.id));const uw=unitW(pid);const sw=stW(pid);const y=d*(CH+GY);
+  function place(pid,x,d){const p=ix.byId.get(pid);if(!p||pos[pid])return;
+    const ch=vCh(pid);const uw=unitW(pid);const sw=stW(pid);const y=d*(CH+GY);
     // Center person+spouses within subtree width
     pos[pid]={x:x+(sw-uw)/2,y};const sps=FE.spouses(pp,p,marriages);let sx=pos[pid].x+CW+CG;
-    sps.forEach(s=>{if(!pos[s.id]){pos[s.id]={x:sx,y};sx+=CW+CG}});
+    for(const s of sps){if(!pos[s.id]){pos[s.id]={x:sx,y};sx+=CW+CG}}
     if(!ch.length)return;
-    const rows=[];for(let i=0;i<ch.length;i+=MAX_COLS)rows.push(ch.slice(i,i+MAX_COLS));
     // Place each row — yOff tracks cumulative generation offset so wrapped rows don't overlap grandchildren
-    let yOff=0;rows.forEach(row=>{const rowW=row.reduce((s,c,i)=>s+(i?HGAP:0)+stW(c.id),0);let cx=x+(sw-rowW)/2;
-      row.forEach(c=>{place(c.id,cx,d+1+yOff);cx+=stW(c.id)+HGAP});
-      yOff+=Math.max(...row.map(c=>stH(c.id)))})}
+    let yOff=0;for(let i=0;i<ch.length;i+=MAX_COLS){const end=Math.min(i+MAX_COLS,ch.length);
+      let rowW=0;for(let j=i;j<end;j++){if(j>i)rowW+=HGAP;rowW+=stW(ch[j].id)}
+      let cx=x+(sw-rowW)/2,maxH=0;
+      for(let j=i;j<end;j++){const c=ch[j];place(c.id,cx,d+1+yOff);cx+=stW(c.id)+HGAP;const v=stH(c.id);if(v>maxH)maxH=v}
+      yOff+=maxH}}
   // Place each root tree side by side
-  let gx=0;roots.forEach(root=>{place(root.id,gx,0);gx+=stW(root.id)+GX*4});
+  let gx=0;for(const root of roots){place(root.id,gx,0);gx+=stW(root.id)+GX*4}
   // Normalize to origin
-  let mx=Infinity,my=Infinity;Object.values(pos).forEach(p=>{mx=Math.min(mx,p.x);my=Math.min(my,p.y)});Object.values(pos).forEach(p=>{p.x-=mx-100;p.y-=my-80});return pos}
+  let mx=Infinity,my=Infinity;for(const p of Object.values(pos)){if(p.x<mx)mx=p.x;if(p.y<my)my=p.y}
+  for(const p of Object.values(pos)){p.x-=mx-100;p.y-=my-80}
+  return pos}
 const REL_LABELS=["Anak","Cucu","Cicit","Canggah","Wareng"];
 function getConns(pp,pos,marriages=[]){const L=[];const drawnSp=new Set();
   // Draw spouse connectors from marriages + fallback to spouseId
@@ -1375,7 +1417,7 @@ function CanvasView({pp,allPP,marriages=[],onSel,selId,onPos,savedPos,povMode,se
   const focusNode=useCallback((person)=>{
     const el=wr.current;if(!el)return;
     // Uncollapse ancestors so node is visible
-    setCollapsed(prev=>{const n=new Set(prev);let cur=pp.find(x=>x.id===person.id);while(cur&&cur.parentId){n.delete(cur.parentId);cur=pp.find(x=>x.id===cur.parentId)}return n});
+    setCollapsed(prev=>{const n=new Set(prev);const ix=_idx(pp);let cur=ix.byId.get(person.id);while(cur&&cur.parentId){n.delete(cur.parentId);cur=ix.byId.get(cur.parentId)}return n});
     // Wait for layout recalc then pan to node
     setTimeout(()=>{const pt=pos[person.id];if(!pt)return;const vw=el.clientWidth,vh=el.clientHeight;const nz=Math.max(zm,0.6);const tcx=pt.x+CW/2,tcy=pt.y+CH/2;setZm(nz);setPan({x:vw/2-tcx*nz,y:vh/2-tcy*nz});setHighlightId(person.id);setCsq("");setCsResults([]);setTimeout(()=>setHighlightId(null),5000)},100)},[pos,zm,pp]);
   const csKeyDown=e=>{if(e.key==="ArrowDown"){e.preventDefault();setCsIdx(i=>Math.min(i+1,csResults.length-1))}else if(e.key==="ArrowUp"){e.preventDefault();setCsIdx(i=>Math.max(i-1,0))}else if(e.key==="Enter"&&csIdx>=0&&csResults[csIdx]){focusNode(csResults[csIdx])}else if(e.key==="Escape"){setCsq("");setCsResults([])}};
@@ -1413,10 +1455,10 @@ function CanvasView({pp,allPP,marriages=[],onSel,selId,onPos,savedPos,povMode,se
   },[pp,collapsed]);
   useEffect(()=>{if(fitted.current&&Object.keys(pos).length>0)onPos(pos)},[pos]);
   const conns=useMemo(()=>getConns(pp,pos,marriages),[pp,pos,marriages]);
-  const rootMap=useMemo(()=>{const m={};pp.forEach(p=>{let cur=p;const seen=new Set();while(cur&&cur.parentId&&!seen.has(cur.id)){seen.add(cur.id);const next=pp.find(x=>x.id===cur.parentId);if(!next)break;cur=next}m[p.id]=cur?.id||p.id});return m},[pp]);
+  const rootMap=useMemo(()=>{const ix=_idx(pp);const m={};for(const p of pp){let cur=p;const seen=new Set();while(cur&&cur.parentId&&!seen.has(cur.id)){seen.add(cur.id);const next=ix.byId.get(cur.parentId);if(!next)break;cur=next}m[p.id]=cur?.id||p.id}return m},[pp]);
   const branchIdx=useMemo(()=>{const idx={};const uniqueRoots=[...new Set(Object.values(rootMap))].sort();uniqueRoots.forEach((rid,i)=>{idx[rid]=i});return idx},[rootMap]);
   const bnd=useMemo(()=>{let mx=0,my=0;Object.values(pos).forEach(p=>{mx=Math.max(mx,p.x+CW+200);my=Math.max(my,p.y+CH+200)});return{w:Math.max(mx,2000),h:Math.max(my,1200)}},[pos]);
-  const gls=useMemo(()=>{const l={};pp.forEach(p=>{const g=FE.gen(pp,p.id);const po=pos[p.id];if(!po)return;if(!l[g])l[g]={mi:po.y,mx:po.y+CH};l[g].mi=Math.min(l[g].mi,po.y);l[g].mx=Math.max(l[g].mx,po.y+CH)});return l},[pp,pos]);
+  const gls=useMemo(()=>{const l={};for(const p of pp){const g=FE.gen(pp,p.id);const po=pos[p.id];if(!po)continue;if(!l[g])l[g]={mi:po.y,mx:po.y+CH,minX:po.x};else{if(po.y<l[g].mi)l[g].mi=po.y;if(po.y+CH>l[g].mx)l[g].mx=po.y+CH;if(po.x<l[g].minX)l[g].minX=po.x}}return l},[pp,pos]);
   const cx=e=>e.touches?e.touches[0].clientX:e.clientX;const cy=e=>e.touches?e.touches[0].clientY:e.clientY;
   const onPS=e=>{if(e.target.closest('.cc')||e.target.closest('.zm')||e.target.closest('.mm'))return;
     // Pinch-to-zoom start
@@ -1461,7 +1503,7 @@ function CanvasView({pp,allPP,marriages=[],onSel,selId,onPos,savedPos,povMode,se
       </div>
     </div>
     <div className="cvs-inner" style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zm})`,width:bnd.w,height:bnd.h}}>
-      {Object.entries(gls).map(([g,lane])=>{const gi=parseInt(g);const gl=GL[gi]||{l:`Gen ${gi+1}`};const c=GC[gi%GC.length];const minX=Math.min(...pp.filter(p=>FE.gen(pp,p.id)===gi).map(p=>pos[p.id]?.x??Infinity));return(<div key={g} className="gen-lane" style={{position:"absolute",left:Math.max(20,minX-160),top:lane.mi+CH/2-14,pointerEvents:"none",zIndex:1}}><div style={{background:`${c}15`,border:`1px solid ${c}40`,color:c,padding:"4px 12px",borderRadius:14,fontSize:11,fontWeight:600,fontFamily:"var(--f-mono)",letterSpacing:".4px",whiteSpace:"nowrap"}}>Gen {gi+1} · {gl.l}</div></div>)})}
+      {Object.entries(gls).map(([g,lane])=>{const gi=parseInt(g);const gl=GL[gi]||{l:`Gen ${gi+1}`};const c=GC[gi%GC.length];return(<div key={g} className="gen-lane" style={{position:"absolute",left:Math.max(20,lane.minX-160),top:lane.mi+CH/2-14,pointerEvents:"none",zIndex:1}}><div style={{background:`${c}15`,border:`1px solid ${c}40`,color:c,padding:"4px 12px",borderRadius:14,fontSize:11,fontWeight:600,fontFamily:"var(--f-mono)",letterSpacing:".4px",whiteSpace:"nowrap"}}>Gen {gi+1} · {gl.l}</div></div>)})}
       <svg className="conn-svg" width={bnd.w} height={bnd.h}>
         {conns.map((c,i)=>{
         if(c.t==="sp"){const mx=(c.x1+c.x2)/2;return(<g key={i}>
