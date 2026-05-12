@@ -198,9 +198,13 @@ const FE={
   pa:(pp,p)=>p.parentId?pp.find(x=>x.id===p.parentId)||null:null,
   sib:(pp,p)=>p.parentId?pp.filter(x=>x.parentId===p.parentId&&x.id!==p.id):[],
   roots:(pp,marriages=[])=>pp.filter(p=>!p.parentId&&!pp.some(x=>x.spouseId===p.id&&x.parentId)&&!marriages.some(m=>m.wifeId===p.id&&pp.find(h=>h.id===m.husbandId)?.parentId)),
-  gen:(pp,pid,g=0)=>{const p=pp.find(x=>x.id===pid);return(!p||!p.parentId)?g:FE.gen(pp,p.parentId,g+1)},
-  desc:(pp,pid)=>{const c=FE.ch(pp,pid);return c.reduce((s,x)=>s+1+FE.desc(pp,x.id),0)},
-  descAll:(pp,pid,marriages)=>{const c=FE.chAll(pp,pid,marriages);return c.reduce((s,x)=>s+1+FE.descAll(pp,x.id,marriages),0)},
+  // gen/desc/descAll carry a seen set so a corrupted parent_id cycle
+  // (A.parent=B and B.parent=A — possible from a bad import or update)
+  // can't infinite-recurse and freeze the renderer. Tree data SHOULD be
+  // acyclic; the guard is a safety net, not a feature.
+  gen:(pp,pid,g=0,seen)=>{seen=seen||new Set();if(seen.has(pid))return g;seen.add(pid);const p=pp.find(x=>x.id===pid);return(!p||!p.parentId)?g:FE.gen(pp,p.parentId,g+1,seen)},
+  desc:(pp,pid,seen)=>{seen=seen||new Set();if(seen.has(pid))return 0;seen.add(pid);const c=FE.ch(pp,pid);return c.reduce((s,x)=>s+1+FE.desc(pp,x.id,seen),0)},
+  descAll:(pp,pid,marriages,seen)=>{seen=seen||new Set();if(seen.has(pid))return 0;seen.add(pid);const c=FE.chAll(pp,pid,marriages);return c.reduce((s,x)=>s+1+FE.descAll(pp,x.id,marriages,seen),0)},
   age:(p)=>{if(!p.birthDate)return null;const b=new Date(p.birthDate),e=p.deathDate?new Date(p.deathDate):new Date();let a=e.getFullYear()-b.getFullYear();if(e.getMonth()<b.getMonth()||(e.getMonth()===b.getMonth()&&e.getDate()<b.getDate()))a--;return a},
   stats:(pp)=>{const t=pp.length,m=pp.filter(p=>p.gender==="male").length,f=t-m,lv=pp.filter(p=>!p.deathDate).length;const mg=Math.max(0,...pp.map(p=>FE.gen(pp,p.id)));const pr=pp.filter(p=>FE.ch(pp,p.id).length>0);const ac=pr.length?(pr.reduce((s,p)=>s+FE.ch(pp,p.id).length,0)/pr.length).toFixed(1):0;const geo=pp.filter(p=>p.location?.lat).length;return{total:t,males:m,females:f,living:lv,deceased:t-lv,generations:mg+1,avgChildren:ac,geotagged:geo}},
   search:(pp,q)=>{const s=q.toLowerCase().trim();return!s?pp:pp.filter(p=>p.name.toLowerCase().includes(s)||(p.birthPlace||"").toLowerCase().includes(s)||(p.notes||"").toLowerCase().includes(s))},
@@ -252,11 +256,14 @@ function bloodDescendants(pp,rootId,marriages=[]){
 }
 function isBloodRelative(pp,personId,rootId,marriages=[]){
   if(personId===rootId)return true;
-  // Root's ancestor chain
+  // Root's ancestor chain. The Set isn't just for membership — it also
+  // detects parent_id cycles (corrupted data). Without this break the
+  // while loop runs forever and the tab dies with RESULT_CODE_HUNG.
   const rootAnc=new Set();let cur=rootId;
-  while(cur){rootAnc.add(cur);const p=pp.find(x=>x.id===cur);cur=p?.parentId||null}
+  while(cur){if(rootAnc.has(cur))break;rootAnc.add(cur);const p=pp.find(x=>x.id===cur);cur=p?.parentId||null}
   // Person or any of their ancestors in root's ancestry → blood relative
-  cur=personId;while(cur){if(rootAnc.has(cur))return true;const p=pp.find(x=>x.id===cur);cur=p?.parentId||null}
+  const seen=new Set();cur=personId;
+  while(cur){if(rootAnc.has(cur))return true;if(seen.has(cur))break;seen.add(cur);const p=pp.find(x=>x.id===cur);cur=p?.parentId||null}
   // Person is descendant of root (including co-parented via spouse)
   return bloodDescendants(pp,rootId,marriages).has(personId);
 }
@@ -266,8 +273,11 @@ function getPOVMembers(pp,rootId,marriages=[]){
   const vis=new Set([rootId]);const branches=[];
   const addBranch=(sid)=>{if(!isBloodRelative(pp,sid,rootId,marriages)&&!branches.some(b=>b.personId===sid)){
     const sp=pp.find(x=>x.id===sid);if(sp)branches.push({personId:sid,name:sp.name})}};
-  // Ancestors upward (include each ancestor's spouses)
-  const addAnc=pid=>{const p=pp.find(x=>x.id===pid);if(!p)return;if(p.parentId){vis.add(p.parentId);
+  // Ancestors upward (include each ancestor's spouses).
+  // ancSeen guards against parent_id cycles — same reason as isBloodRelative.
+  const ancSeen=new Set();
+  const addAnc=pid=>{if(ancSeen.has(pid))return;ancSeen.add(pid);
+    const p=pp.find(x=>x.id===pid);if(!p)return;if(p.parentId){vis.add(p.parentId);
     const par=pp.find(x=>x.id===p.parentId);if(par)FE.spouses(pp,par,marriages).forEach(s=>vis.add(s.id));
     addAnc(p.parentId)}};
   addAnc(rootId);
@@ -1260,20 +1270,25 @@ function Workspace({family:initFam,user,onBack}){
   useEffect(()=>{const mq=window.matchMedia('(max-width:768px)');const h=e=>setIsMobile(e.matches);mq.addEventListener('change',h);return()=>mq.removeEventListener('change',h)},[]);
   // POV tree navigation
   const[povRootId,setPovRootId]=useState(null);const[povHistory,setPovHistory]=useState([]);const[povMode,setPovMode]=useState(true);
-  const autoRoot=useMemo(()=>{const roots=FE.roots(pp,mrs);if(!roots.length)return pp[0]?.id||null;
+  const autoRoot=useMemo(()=>{const t0=performance.now();const roots=FE.roots(pp,mrs);if(!roots.length)return pp[0]?.id||null;
     // Pick root with most total descendants (recursive, includes co-parented children).
     // Direct-children count misleads when a patriarch has 1 child but many grandchildren.
     const famLower=(fam?.name||"").toLowerCase();const firstName=p=>(p.name||"").toLowerCase().split(/\s+/)[0]||"";
-    return roots.reduce((best,r)=>{
+    const r=roots.reduce((best,r)=>{
       const rD=FE.descAll(pp,r.id,mrs),bD=FE.descAll(pp,best.id,mrs);
       if(rD!==bD)return rD>bD?r:best;
       // Tiebreaker: prefer person whose first name appears in family name
       const rIn=firstName(r)&&famLower.includes(firstName(r));const bIn=firstName(best)&&famLower.includes(firstName(best));
       if(rIn&&!bIn)return r;if(bIn&&!rIn)return best;
       return best;
-    }).id},[pp,mrs,fam?.name]);
+    }).id;
+    const dt=performance.now()-t0;if(dt>50)console.warn(`[NASAB] autoRoot ${dt.toFixed(0)}ms (${pp.length} members, ${roots.length} roots)`);
+    return r},[pp,mrs,fam?.name]);
   const effectiveRoot=povRootId||autoRoot;
-  const povData=useMemo(()=>povMode&&effectiveRoot?getPOVMembers(pp,effectiveRoot,mrs):{visible:pp,branches:[]},[pp,effectiveRoot,mrs,povMode]);
+  const povData=useMemo(()=>{if(!povMode||!effectiveRoot)return{visible:pp,branches:[]};
+    const t0=performance.now();const r=getPOVMembers(pp,effectiveRoot,mrs);
+    const dt=performance.now()-t0;if(dt>50)console.warn(`[NASAB] getPOVMembers ${dt.toFixed(0)}ms (${pp.length} members, ${r.visible.length} visible, ${r.branches.length} branches)`);
+    return r},[pp,effectiveRoot,mrs,povMode]);
   const povPP=povData.visible;const povBranches=povData.branches;
   const switchPov=(newRootId)=>{const cur=pp.find(p=>p.id===effectiveRoot);setPovHistory(prev=>[...prev,{rootId:effectiveRoot,label:cur?.name||"Root"}]);setPovRootId(newRootId)};
   const povBack=(idx)=>{const h=povHistory[idx];setPovRootId(h.rootId);setPovHistory(prev=>prev.slice(0,idx))};
