@@ -33,11 +33,12 @@
   Cache-Control: public, max-age=0, must-revalidate
 
 # ── Root SPA shell + everything else ──
-# index.html must revalidate so users always boot off the bundle that
-# matches the deployed asset hashes. Security headers applied here cascade
-# down to /* via Pages header inheritance.
+# Security headers cascade to all paths via Pages header inheritance.
+# Deliberately NO Cache-Control here: setting it on /* would concatenate
+# with /assets/* (Pages merges header values across all matching rules,
+# and `!` only strips Pages defaults — not user rules from less-specific
+# paths). HTML responses already default to must-revalidate via Pages.
 /*
-  Cache-Control: public, max-age=0, must-revalidate
   Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY

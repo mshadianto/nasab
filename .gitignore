@@ -15,3 +15,6 @@ pernyataan_hak_cipta.*
 prompt_KK.md
 *.docx
 *.pdf
+
+# One-off work prompts (already executed; audit doc + commits are the record)
+PROMPT-*.md
