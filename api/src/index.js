@@ -7,7 +7,7 @@ const ALLOWED_ORIGINS = ['https://nasab.biz.id','https://nasab-bua.pages.dev','h
 function corsH(request) {
   const o = request.headers.get('Origin') || '';
   return {
-    'Access-Control-Allow-Origin': ALLOWED_ORIGINS.some(a => o.startsWith(a.replace(/\/$/, ''))) ? o : ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(o) ? o : ALLOWED_ORIGINS[0],
     'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type,Authorization',
     'Vary': 'Origin'
@@ -17,12 +17,25 @@ function corsH(request) {
 let _cors = null;// cached per request
 // Baseline security headers attached to every API response. HSTS / X-Frame
 // keep parity with the frontend `_headers` file so that direct hits to the
-// API hostname don't downgrade the security posture.
-const SECURITY_HEADERS = {
+// API hostname don't downgrade the security posture. CSP is strict —
+// `default-src 'none'` is appropriate for an API that only emits JSON
+// (no fonts/scripts/images need loading from JSON responses).
+// SECURITY_HEADERS_NO_CSP is the same set minus CSP, used by /api/ai/proxy
+// which forwards upstream provider Content-Type (sometimes text/event-stream
+// for streaming); CSP on non-document responses is generally inert but we
+// exclude it defensively to avoid any edge-case header interaction.
+const SECURITY_HEADERS_NO_CSP = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+  'Cross-Origin-Resource-Policy': 'same-site',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+};
+const SECURITY_HEADERS = {
+  ...SECURITY_HEADERS_NO_CSP,
+  'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
 };
 // Default cache for API responses is `private, no-store` — D1-backed data
 // is per-user and must never be cached at CDN/proxy. Override per-endpoint
@@ -85,6 +98,7 @@ const RL_SPECS = {
   register: { limit: 5, period: 60 },
   family_create: { limit: 3, period: 60 },
   pwreset: { limit: 3, period: 3600 },
+  ai_proxy: { limit: 60, period: 3600 },
 };
 async function rateLimit(name, key) {
   const spec = RL_SPECS[name];
@@ -214,7 +228,10 @@ async function sendResetEmail(env, toEmail, resetUrl) {
 
 // ─── NIK Encryption (AES-GCM) ──────────────────────────────
 async function getEncKey(env) {
-  const raw = new TextEncoder().encode((env.NIK_ENCRYPTION_KEY || 'nasab-nik-default-key-32chars!!').slice(0, 32));
+  if (!env.NIK_ENCRYPTION_KEY || env.NIK_ENCRYPTION_KEY.length < 32) {
+    throw new Error('NIK_ENCRYPTION_KEY env var must be set (min 32 chars). Generate: openssl rand -base64 32');
+  }
+  const raw = new TextEncoder().encode(env.NIK_ENCRYPTION_KEY.slice(0, 32));
   return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
 }
 async function encNIK(nik, env) {
@@ -239,10 +256,18 @@ function maskNIKStr(nik) { return nik && nik.length >= 16 ? nik.slice(0, 4) + '�
 
 // ─── Secret Encryption (AES-GCM) — separate key from NIK ───
 // Used for AI API keys (Claude/Groq/Gemini) so an NIK key compromise
-// doesn't pivot to billing tokens. Falls back to NIK key, then literal.
+// doesn't pivot to billing tokens. CRIT-03 (A4d-2): the prior cascade
+// `AI_SECRETS_KEY || NIK_ENCRYPTION_KEY || literal` is removed —
+// AI_SECRETS_KEY must now be set explicitly (matches the fail-loud
+// pattern from requireSecret for TOKEN_SECRET). Pre-deploy: confirm
+// AI_SECRETS_KEY is set as a Worker secret. Production user_secrets
+// table was empty at A4d-2 apply time (verified via D1 query), so no
+// re-encryption migration was needed.
 async function getSecretKey(env) {
-  const src = env.AI_SECRETS_KEY || env.NIK_ENCRYPTION_KEY || 'nasab-secret-default-32-chars!!!';
-  const raw = new TextEncoder().encode(src.slice(0, 32));
+  if (!env.AI_SECRETS_KEY || env.AI_SECRETS_KEY.length < 32) {
+    throw new Error('AI_SECRETS_KEY env var must be set (min 32 chars). Generate: openssl rand -base64 32');
+  }
+  const raw = new TextEncoder().encode(env.AI_SECRETS_KEY.slice(0, 32));
   return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
 }
 async function encSecret(plain, env) {
@@ -383,7 +408,8 @@ export default {
         const nameErr = validateUserName(name);
         if (nameErr) return err(nameErr);
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return err('Email tidak valid');
-        if (password.length < 6) return err('Password minimal 6 karakter');
+        const pwErr = validatePassword(password, email);
+        if (pwErr) return err(pwErr);
         const existing = await DB.prepare('SELECT id FROM users WHERE email = ?').bind(email.toLowerCase()).first();
         if (existing) return err('Email sudah terdaftar');
         const id = 'u_' + uid();
@@ -730,6 +756,8 @@ export default {
         const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
         const fid = posPath[1];
+        const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
+        if (!isSuperAdmin(user) && (!collab || collab.role === 'viewer')) return err('Tidak punya izin', 403);
         const { positions } = await request.json();
         // Upsert all positions
         await DB.prepare('DELETE FROM canvas_positions WHERE family_id = ?').bind(fid).run();
@@ -773,15 +801,30 @@ export default {
         const collab = await DB.prepare('SELECT role FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, user.id).first();
         if (!collab || collab.role !== 'owner') return err('Hanya owner bisa invite', 403);
         const { email, role } = await request.json();
+        // Whitelist guard: enum-clamp the requested role. Without this,
+        // a malformed/malicious payload could write arbitrary strings
+        // into family_collaborators.role and bypass downstream role checks
+        // (which only test against the canonical 4 values).
+        const VALID_ROLES = ['viewer', 'editor', 'owner'];
+        const requestedRole = (role || 'editor').toLowerCase();
+        if (!VALID_ROLES.includes(requestedRole)) {
+          return err('Role tidak valid. Pilih: viewer, editor, atau owner.');
+        }
+        // Defense-in-depth privilege-escalation guard. The caller-role gate
+        // above already restricts invite-issuance to owners, but keep this
+        // check valid if that gate is ever loosened to editors.
+        if (requestedRole === 'owner' && collab.role !== 'owner') {
+          return err('Hanya owner yang bisa promote ke owner.', 403);
+        }
         // Check if user exists
         const invitee = await DB.prepare('SELECT * FROM users WHERE email = ?').bind(email.toLowerCase()).first();
         if (invitee) {
           const already = await DB.prepare('SELECT * FROM family_collaborators WHERE family_id = ? AND user_id = ?').bind(fid, invitee.id).first();
           if (already) return err('User sudah bergabung');
-          await DB.prepare('INSERT INTO family_collaborators (family_id, user_id, role) VALUES (?, ?, ?)').bind(fid, invitee.id, role || 'editor').run();
-          return json({ message: `${invitee.name} bergabung sebagai ${role}` });
+          await DB.prepare('INSERT INTO family_collaborators (family_id, user_id, role) VALUES (?, ?, ?)').bind(fid, invitee.id, requestedRole).run();
+          return json({ message: `${invitee.name} bergabung sebagai ${requestedRole}` });
         } else {
-          await DB.prepare('INSERT INTO invites (family_id, email, role, invited_by) VALUES (?, ?, ?, ?)').bind(fid, email.toLowerCase(), role || 'editor', user.name).run();
+          await DB.prepare('INSERT INTO invites (family_id, email, role, invited_by) VALUES (?, ?, ?, ?)').bind(fid, email.toLowerCase(), requestedRole, user.name).run();
           return json({ message: `Undangan dikirim ke ${email}` });
         }
       }
@@ -1133,6 +1176,9 @@ export default {
       if (path === '/api/ai/proxy' && method === 'POST') {
         const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
+        if (!await rateLimit('ai_proxy', `ai:${user.id}`)) {
+          return err('Terlalu banyak request AI. Coba lagi nanti.', 429);
+        }
 
         let body;
         try { body = await request.json(); }
@@ -1175,7 +1221,7 @@ export default {
 
         return new Response(respText, {
           status: upstream.status,
-          headers: { 'Content-Type': upstream.headers.get('Content-Type') || 'application/json', 'Cache-Control': 'private, no-store', ...SECURITY_HEADERS, ..._cors },
+          headers: { 'Content-Type': upstream.headers.get('Content-Type') || 'application/json', 'Cache-Control': 'private, no-store', ...SECURITY_HEADERS_NO_CSP, ..._cors },
         });
       }
 
