@@ -47,7 +47,13 @@ function json(data, status = 200, cache = 'private, no-store') {
   });
 }
 function err(msg, status = 400) { return json({ error: msg }, status); }
-function uid() { return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`; }
+function uid() {
+  // 12 random bytes via Web Crypto → 24 hex chars. Replaces Math.random,
+  // which is not cryptographically secure (MED-02). Width grows from
+  // 6 chars to 24 — schema columns are TEXT with no length limit, so
+  // existing rows are unaffected, but new IDs will visibly be longer.
+  return `${Date.now().toString(36)}_${bytesToHex(crypto.getRandomValues(new Uint8Array(12)))}`;
+}
 
 // ─── Anti-spam / pattern detection ──────────────────────────
 const SUSPICIOUS_PATTERNS = [
@@ -295,18 +301,45 @@ async function hashPw(pw) {
   const hash = await crypto.subtle.digest('SHA-256', enc);
   return btoa(String.fromCharCode(...new Uint8Array(hash)));
 }
+// OWASP 2023+ recommended minimum for PBKDF2-SHA256. Bumped from the
+// prior 100k. Format v2 (`PBKDF2v2:`) carries the iteration count in
+// the stored hash so future bumps don't require branchy code.
+const PBKDF2_ITERATIONS = 600000;
+
 async function hashPwPBKDF2(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, km, 256);
-  return `PBKDF2:${btoa(String.fromCharCode(...salt))}:${btoa(String.fromCharCode(...new Uint8Array(bits)))}`;
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' }, km, 256);
+  // v2 stores iter explicitly. Legacy v1 (`PBKDF2:`) remains readable
+  // by verifyPwPBKDF2 for backward compat — upgrade-on-login rotates
+  // v1 → v2 transparently (Change D).
+  return `PBKDF2v2:${PBKDF2_ITERATIONS}:${btoa(String.fromCharCode(...salt))}:${btoa(String.fromCharCode(...new Uint8Array(bits)))}`;
 }
 async function verifyPwPBKDF2(password, stored) {
-  if (!stored.startsWith('PBKDF2:')) return false;
-  const [, sB, hB] = stored.split(':');
+  // Parse stored hash. v2 format: `PBKDF2v2:<iter>:<salt>:<hash>` (4 parts).
+  // v1 format: `PBKDF2:<salt>:<hash>` (3 parts, implicit 100k iterations).
+  // Per A5 contract: enforce parts.length explicitly per variant — anything
+  // else is malformed input and treated as a failed auth (not an error).
+  let iterations, sB, hB;
+  if (stored.startsWith('PBKDF2v2:')) {
+    const parts = stored.split(':');
+    if (parts.length !== 4) return false;
+    iterations = parseInt(parts[1], 10);
+    if (!Number.isFinite(iterations) || iterations < 1) return false;
+    sB = parts[2];
+    hB = parts[3];
+  } else if (stored.startsWith('PBKDF2:')) {
+    const parts = stored.split(':');
+    if (parts.length !== 3) return false;
+    iterations = 100000; // legacy v1 implicit
+    sB = parts[1];
+    hB = parts[2];
+  } else {
+    return false;
+  }
   const salt = Uint8Array.from(atob(sB), c => c.charCodeAt(0));
   const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, km, 256);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, km, 256);
   return btoa(String.fromCharCode(...new Uint8Array(bits))) === hB;
 }
 // ─── Token signing (HMAC-SHA256, session-backed) ───────────
@@ -428,8 +461,17 @@ export default {
         const user = await DB.prepare('SELECT * FROM users WHERE email = ?').bind(email.toLowerCase()).first();
         if (!user) return err('Email atau password salah', 401);
         let valid = false;
-        if (user.password_hash.startsWith('PBKDF2:')) {
+        if (user.password_hash.startsWith('PBKDF2:') || user.password_hash.startsWith('PBKDF2v2:')) {
           valid = await verifyPwPBKDF2(password, user.password_hash);
+          // Auto-upgrade legacy v1 (`PBKDF2:` 100k) to v2 (`PBKDF2v2:` 600k)
+          // on successful login. One-time ~600ms latency hit for the affected
+          // user. NOTE: `startsWith('PBKDF2:')` is FALSE for v2 hashes (they
+          // start with `PBKDF2v2:`, differing at position 6) — so this guard
+          // correctly fires only on v1.
+          if (valid && user.password_hash.startsWith('PBKDF2:')) {
+            const newHash = await hashPwPBKDF2(password);
+            await DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(newHash, user.id).run();
+          }
         } else {
           const legacyHash = await hashPw(password);
           valid = user.password_hash === legacyHash;
