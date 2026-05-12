@@ -45,3 +45,19 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(self), payment=()
   Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org; connect-src 'self' https://nasab-api.sopian-hadianto.workers.dev https://nominatim.openstreetmap.org https://*.basemaps.cartocdn.com https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+
+# ════════════════════════════════════════════════════════════
+# CSP-ENFORCE-DRAFT (uncomment to flip from Report-Only → enforce)
+# ════════════════════════════════════════════════════════════
+# v1 posture: ship with `Content-Security-Policy-Report-Only` above.
+# Monitor browser console / NEL reports for 7+ days post-deploy.
+# To flip in v1.1:
+#   1. Confirm zero unexpected violations in real prod traffic
+#   2. Comment out the `Content-Security-Policy-Report-Only:` line above
+#   3. Uncomment the policy line below (move it into the `/*` block,
+#      drop the leading `# `)
+#   4. Deploy; rollback if anything breaks
+#
+# Keep the draft value below in sync with the Report-Only above until flip.
+#
+#   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org; connect-src 'self' https://nasab-api.sopian-hadianto.workers.dev https://nominatim.openstreetmap.org https://*.basemaps.cartocdn.com https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
