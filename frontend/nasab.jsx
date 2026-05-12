@@ -116,7 +116,8 @@ const API={
   async _f(path,opts={}){const h={'Content-Type':'application/json'};if(this.token)h['Authorization']=`Bearer ${this.token}`;const r=await fetch(`${API_URL}${path}`,{...opts,headers:h});const d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed');return d},
   async register({name,email,password}){const d=await this._f('/api/auth/register',{method:'POST',body:JSON.stringify({name,email,password})});this.token=d.token;localStorage.setItem(TK,d.token);return d.user},
   async login({email,password}){const d=await this._f('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})});this.token=d.token;localStorage.setItem(TK,d.token);return d.user},
-  async resetPassword({email,name,new_password}){return this._f('/api/auth/reset-password',{method:'POST',body:JSON.stringify({email,name,new_password})})},
+  async forgotPassword(email){return this._f('/api/auth/forgot-password',{method:'POST',body:JSON.stringify({email})})},
+  async resetPassword(token,new_password){return this._f('/api/auth/reset-password',{method:'POST',body:JSON.stringify({token,new_password})})},
   async me(){return(await this._f('/api/auth/me')).user},
   async getFamilies(){const d=await this._f('/api/families');return d.families.map(f=>({...f,myRole:f.my_role}))},
   async createFamily({name,description}){return(await this._f('/api/families',{method:'POST',body:JSON.stringify({name,description})})).family},
@@ -1071,11 +1072,132 @@ const ini=n=>{const w=(n||"").trim().split(/\s+/).filter(Boolean);if(w.length===
 function DevFooter(){return(<div className="dev-footer"><span className="dev-name">{APP.developer.name}</span> — {APP.developer.role} · <span className="dev-org">{APP.developer.org}</span><div className="dev-ver">{APP.name} v{APP.version} · Build {APP.build}</div></div>)}
 
 // ═══════════════════════════════════════════════════════════════
+// SECURITY NOTICE V1 — One-time post-deploy login notice
+// ═══════════════════════════════════════════════════════════════
+// Rendered inside AuthScreen when mode === 'login'. Persists dismiss
+// state in sessionStorage so it doesn't reappear on tab navigation,
+// but DOES reappear on a fresh browser session (intentional — first
+// visit per session is when users hit this banner).
+function SecurityNoticeV1(){
+  const [dismissed,setDismissed]=useState(()=>sessionStorage.getItem('security_v1_dismissed')==='1');
+  if(dismissed) return null;
+  const handleDismiss=()=>{sessionStorage.setItem('security_v1_dismissed','1');setDismissed(true)};
+  return (
+    <div style={{background:'var(--glass)',border:'1px solid var(--pri)',borderRadius:8,padding:'12px 14px',marginBottom:14,marginTop:4,fontSize:11,color:'var(--t2)',lineHeight:1.55,position:'relative'}}>
+      <button onClick={handleDismiss} aria-label="Tutup notifikasi keamanan" style={{position:'absolute',top:6,right:10,background:'none',border:'none',cursor:'pointer',color:'var(--t3)',fontSize:18,padding:0,lineHeight:1}}>×</button>
+      <div style={{fontWeight:600,color:'var(--t1)',marginBottom:8,paddingRight:18}}>
+        🔒 Peningkatan Keamanan — Login Ulang Diperlukan
+      </div>
+      <div style={{whiteSpace:'pre-line'}}>
+        {`Kami baru saja merilis pembaruan keamanan untuk sistem otentikasi NASAB.
+Sebagai bagian dari proses ini, semua sesi login sebelumnya diakhiri.
+
+Mohon login ulang dengan email dan password Anda yang biasa.
+Data dan akses keluarga Anda aman dan tidak berubah.
+
+Terima kasih atas kesabarannya — pembaruan ini didasarkan pada masukan
+QA dari Pak Nabil Anugerah Pangestu, dan bagian dari komitmen kami
+menjaga keamanan nasab keluarga Anda.`}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RESET PASSWORD PAGE — token-based recovery (hash route)
+// ═══════════════════════════════════════════════════════════════
+// Reached via #/reset-password?token=<64hex>. Reads token from hash query,
+// shows form, submits via API.resetPassword(token, new_password). Three
+// terminal states: token-missing/invalid, success, generic error.
+function ResetPasswordPage({token}){
+  const [newPw,setNewPw]=useState('');
+  const [confirm,setConfirm]=useState('');
+  const [showPw,setShowPw]=useState(false);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  const [success,setSuccess]=useState(false);
+
+  const goLogin=()=>{window.location.hash='#/login';window.location.reload()};
+
+  const submit=async()=>{
+    setError('');
+    if(newPw.length<12){setError('Password minimal 12 karakter');return}
+    if(!/[A-Z]/.test(newPw)||!/[a-z]/.test(newPw)||!/[0-9]/.test(newPw)){
+      setError('Password harus mengandung huruf besar, huruf kecil, dan angka');return
+    }
+    if(newPw!==confirm){setError('Konfirmasi password tidak cocok');return}
+    setBusy(true);
+    try{await API.resetPassword(token,newPw);setSuccess(true)}
+    catch(e){setError(e.message||'Token tidak valid atau sudah kedaluwarsa')}
+    setBusy(false);
+  };
+
+  // Token-missing / malformed → dead-end with link to login
+  if(!token||typeof token!=='string'||token.length!==64){
+    return <div className="auth-wrap"><div className="auth-form-side"><div className="auth-form">
+      <h2>Link Tidak Valid</h2>
+      <div className="sub">Link reset password tidak ditemukan atau formatnya salah.</div>
+      <div style={{marginTop:16,fontSize:12,color:'var(--t2)'}}>
+        Silakan minta link reset baru via <span style={{color:'var(--pri)',cursor:'pointer',fontWeight:600}} onClick={goLogin}>halaman login → Lupa Password</span>.
+      </div>
+    </div></div></div>;
+  }
+
+  // Success → go-to-login CTA
+  if(success){
+    return <div className="auth-wrap"><div className="auth-form-side"><div className="auth-form">
+      <h2>✅ Password Berhasil Diubah</h2>
+      <div className="sub">Silakan masuk dengan password baru Anda. Semua sesi login lama di perangkat lain juga telah diakhiri otomatis.</div>
+      <button className="btn btn-p btn-block" onClick={goLogin} style={{marginTop:16}}>Ke Halaman Login →</button>
+    </div></div></div>;
+  }
+
+  // Form state
+  return <div className="auth-wrap"><div className="auth-form-side"><div className="auth-form">
+    <h2>Reset Password</h2>
+    <div className="sub">Masukkan password baru untuk akun Anda.</div>
+    {error&&<div style={{background:'#3f1219',border:'1px solid #5f1d2d',color:'#fca5a5',padding:'7px 10px',borderRadius:6,fontSize:11,marginBottom:12,marginTop:12}}>{error}</div>}
+    <div className="fg"><label className="fl">Password Baru</label>
+      <div style={{position:'relative'}}>
+        <input className="fi" type={showPw?'text':'password'} value={newPw} onChange={e=>setNewPw(e.target.value)} placeholder="Min. 12 karakter, huruf besar+kecil+angka" style={{paddingRight:36}}/>
+        <button type="button" onClick={()=>setShowPw(!showPw)} style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--t3)',fontSize:14,padding:2}} title={showPw?'Sembunyikan':'Tampilkan'}>{showPw?'🙈':'👁'}</button>
+      </div>
+    </div>
+    <div className="fg"><label className="fl">Konfirmasi Password Baru</label>
+      <input className="fi" type={showPw?'text':'password'} value={confirm} onChange={e=>setConfirm(e.target.value)} placeholder="Ulangi password baru" onKeyDown={e=>e.key==='Enter'&&submit()}/>
+    </div>
+    <button className="btn btn-p btn-block" onClick={submit} disabled={busy} style={{marginTop:6}}>{busy?'Memproses...':'Ubah Password →'}</button>
+  </div></div></div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // AUTH — Landing Page + Login/Register
 // ═══════════════════════════════════════════════════════════════
 function AuthScreen({onLogin}){
   const [mode,setMode]=useState("login");const [name,setName]=useState("");const [email,setEmail]=useState("");const [pw,setPw]=useState("");const [err,setErr]=useState("");const [msg,setMsg]=useState("");const [busy,setBusy]=useState(false);const[showPw,setShowPw]=useState(false);
-  const go=async()=>{setErr("");setMsg("");setBusy(true);const ep=email.trim(),np=name.trim(),pp=pw.trim();try{if(mode==="forgot"){if(!ep||!np||!pp){setErr("Semua field wajib diisi");setBusy(false);return}const r=await API.resetPassword({email:ep,name:np,new_password:pp});setMsg(r.message);setMode("login");setPw("");setBusy(false);return}if(mode==="register"){if(!np||!ep||!pp){setErr("Semua field wajib diisi");setBusy(false);return}onLogin(await API.register({name:np,email:ep,password:pp}))}else{if(!ep||!pp){setErr("Email dan password wajib");setBusy(false);return}onLogin(await API.login({email:ep,password:pp}))}}catch(e){setErr(e.message)}setBusy(false)};
+  const go=async()=>{
+    setErr("");setMsg("");setBusy(true);
+    const ep=email.trim(),np=name.trim(),pp=pw.trim();
+    try{
+      if(mode==="forgot"){
+        if(!ep){setErr("Email wajib diisi");setBusy(false);return}
+        // Always show generic message regardless of API result (anti-enumeration).
+        // Backend always returns 200 + generic body, but be defensive in case of
+        // network/transport error we still surface the same UX.
+        try{await API.forgotPassword(ep)}catch{}
+        setMsg("Jika email terdaftar, link reset akan dikirim ke inbox Anda dalam beberapa menit.");
+        setBusy(false);return;
+      }
+      if(mode==="register"){
+        if(!np||!ep||!pp){setErr("Semua field wajib diisi");setBusy(false);return}
+        onLogin(await API.register({name:np,email:ep,password:pp}));
+      } else {
+        if(!ep||!pp){setErr("Email dan password wajib");setBusy(false);return}
+        onLogin(await API.login({email:ep,password:pp}));
+      }
+    } catch(e){setErr(e.message)}
+    setBusy(false);
+  };
   return(
     <div className="auth-wrap">
       <div className="auth-hero">
@@ -1099,15 +1221,16 @@ function AuthScreen({onLogin}){
       </div>
       <div className="auth-form-side">
         <div className="auth-form">
-          <h2>{mode==="login"?"Masuk":mode==="register"?"Daftar":"Reset Password"}</h2>
-          <div className="sub">{mode==="login"?"Masuk ke akun NASAB Anda":mode==="register"?"Buat akun gratis — tanpa batas":"Masukkan email, nama terdaftar, dan password baru"}</div>
+          <h2>{mode==="login"?"Masuk":mode==="register"?"Daftar":"Lupa Password"}</h2>
+          <div className="sub">{mode==="login"?"Masuk ke akun NASAB Anda":mode==="register"?"Buat akun gratis — tanpa batas":"Masukkan email Anda — link reset password akan dikirim jika email terdaftar."}</div>
+          {mode==="login"&&<SecurityNoticeV1/>}
           {mode==="register"&&<div style={{background:"var(--glass)",border:"1px solid var(--bd)",padding:"8px 10px",borderRadius:8,fontSize:11,color:"var(--t2)",marginBottom:4,lineHeight:1.5}}>ℹ️ Data <b>NIK</b> dan <b>Kartu Keluarga (KK)</b> bersifat <b>opsional</b> — bisa dilengkapi nanti saat menambah anggota keluarga.</div>}
           {err&&<div style={{background:"#3f1219",border:"1px solid #5f1d2d",color:"#fca5a5",padding:"7px 10px",borderRadius:6,fontSize:11,marginBottom:12}}>{err}</div>}
           {msg&&<div style={{background:"#132f1e",border:"1px solid #1d5f2d",color:"#86efac",padding:"7px 10px",borderRadius:6,fontSize:11,marginBottom:12}}>{msg}</div>}
-          {(mode==="register"||mode==="forgot")&&<div className="fg"><label className="fl">Nama</label><input className="fi" value={name} onChange={e=>setName(e.target.value)} placeholder={mode==="forgot"?"Nama sesuai akun terdaftar":"Nama lengkap"}/></div>}
+          {mode==="register"&&<div className="fg"><label className="fl">Nama</label><input className="fi" value={name} onChange={e=>setName(e.target.value)} placeholder="Nama lengkap"/></div>}
           <div className="fg"><label className="fl">Email</label><input className="fi" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="nama@email.com" onKeyDown={e=>e.key==="Enter"&&go()}/></div>
-          <div className="fg"><label className="fl">{mode==="forgot"?"Password Baru":"Password"}</label><div style={{position:"relative"}}><input className="fi" type={showPw?"text":"password"} value={pw} onChange={e=>setPw(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&go()} style={{paddingRight:36}}/><button type="button" onClick={()=>setShowPw(!showPw)} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"var(--t3)",fontSize:14,padding:2}} title={showPw?"Sembunyikan":"Tampilkan"}>{showPw?"🙈":"👁"}</button></div></div>
-          <button className="btn btn-p btn-block" onClick={go} disabled={busy} style={{marginTop:6}}>{busy?"Memproses...":(mode==="login"?"Masuk →":mode==="register"?"Buat Akun →":"Reset Password →")}</button>
+          {mode!=="forgot"&&<div className="fg"><label className="fl">Password</label><div style={{position:"relative"}}><input className="fi" type={showPw?"text":"password"} value={pw} onChange={e=>setPw(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&go()} style={{paddingRight:36}}/><button type="button" onClick={()=>setShowPw(!showPw)} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"var(--t3)",fontSize:14,padding:2}} title={showPw?"Sembunyikan":"Tampilkan"}>{showPw?"🙈":"👁"}</button></div></div>}
+          <button className="btn btn-p btn-block" onClick={go} disabled={busy} style={{marginTop:6}}>{busy?"Memproses...":(mode==="login"?"Masuk →":mode==="register"?"Buat Akun →":"Kirim Link Reset")}</button>
           {mode==="login"&&<div style={{textAlign:"center",marginTop:8,fontSize:11}}><span style={{color:"var(--pri)",cursor:"pointer"}} onClick={()=>{setMode("forgot");setErr("");setMsg("")}}>Lupa Password?</span></div>}
           <div style={{textAlign:"center",marginTop:12,fontSize:11,color:"var(--t3)"}}>
             {mode==="login"?<>Belum punya akun? <span style={{color:"var(--pri)",cursor:"pointer",fontWeight:600}} onClick={()=>{setMode("register");setErr("");setMsg("")}}>Daftar Gratis</span></>
@@ -2330,6 +2453,11 @@ function InstallBanner(){
 }
 export default function App(){
   const hash=window.location.hash;
+  if(hash.startsWith('#/reset-password')){
+    const queryStart=hash.indexOf('?');
+    const params=new URLSearchParams(queryStart>=0?hash.slice(queryStart):'');
+    return <ResetPasswordPage token={params.get('token')}/>;
+  }
   if(hash.startsWith('#/undangan/')){const slug=hash.split('/')[2];return<InvitationPage slug={slug}/>}
   const[user,setUser]=useState(null);const[af,setAf]=useState(null);const[adminView,setAdminView]=useState(false);const[loading,setLoading]=useState(true);
   const[showAuth,setShowAuth]=useState(()=>{const h=window.location.hash;return h==="#/login"||h==="#/register"||h==="#/auth";});
