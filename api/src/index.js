@@ -84,6 +84,7 @@ const RL_SPECS = {
   login: { limit: 10, period: 60 },
   register: { limit: 5, period: 60 },
   family_create: { limit: 3, period: 60 },
+  pwreset: { limit: 3, period: 3600 },
 };
 async function rateLimit(name, key) {
   const spec = RL_SPECS[name];
@@ -100,6 +101,116 @@ async function rateLimit(name, key) {
   return true;
 }
 function clientIp(request) { return request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown'; }
+
+// ─── Security helpers (added in Security Hardening v1) ─────
+// These are pure utilities; signatures of any pre-existing function
+// are NOT changed in this group. Token funcs (makeToken/verifyToken)
+// are replaced in Group A3 — they will consume hmacSign/hmacVerify
+// and requireSecret from here.
+
+const FORGOT_GENERIC_MSG = 'Jika email terdaftar, link reset akan dikirim ke inbox Anda dalam beberapa menit.';
+
+async function sha256Hex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function bytesToHex(bytes) {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Constant-time string compare. Used by hmacVerify to prevent timing
+// side-channels when validating signatures. Both args must be strings.
+function timingSafeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+async function hmacSign(payload, secret) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign', 'verify']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
+  return btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); // base64url
+}
+
+async function hmacVerify(payload, signature, secret) {
+  const expected = await hmacSign(payload, secret);
+  return timingSafeEqual(expected, signature);
+}
+
+// Fail-loud secret accessor. Replaces the old `env.TOKEN_SECRET || 'nasab-secret'`
+// fallback pattern (CRIT-03). Caller code in Group A3 will route all token
+// signing/verifying through this — missing or short secret → throws → 500
+// response, which is the intended behavior so misconfigured deploys are
+// caught immediately rather than running with a known-public default key.
+function requireSecret(env) {
+  if (!env.TOKEN_SECRET || env.TOKEN_SECRET.length < 32) {
+    throw new Error('TOKEN_SECRET env var must be set (min 32 chars). Generate: openssl rand -base64 32');
+  }
+  return env.TOKEN_SECRET;
+}
+
+// Password policy gate. Called by register handler and the new
+// reset-password handler (Group A4). Per audit feedback:
+//   - min 12 / max 128 chars
+//   - must contain upper + lower + digit
+//   - reject common-prefix patterns and all-same-char strings
+//   - reject password == email (case-insensitive) — common reuse pattern
+// Returns error message string, or null if password is OK.
+function validatePassword(pw, email) {
+  if (!pw || typeof pw !== 'string') return 'Password wajib diisi';
+  if (pw.length < 12) return 'Password minimal 12 karakter';
+  if (pw.length > 128) return 'Password maksimal 128 karakter';
+  if (!/[A-Z]/.test(pw)) return 'Password harus mengandung huruf besar';
+  if (!/[a-z]/.test(pw)) return 'Password harus mengandung huruf kecil';
+  if (!/[0-9]/.test(pw)) return 'Password harus mengandung angka';
+  if (/^(.)\1+$/.test(pw)) return 'Password tidak boleh karakter berulang';
+  if (/^(password|nasab|admin|qwerty|12345)/i.test(pw)) return 'Password terlalu umum, pilih yang lain';
+  if (email && pw.toLowerCase() === String(email).toLowerCase().trim()) return 'Password tidak boleh sama dengan email';
+  return null;
+}
+
+// Reset email sender — Resend (preferred) → MailChannels (free fallback).
+// Throws on send failure; caller MUST try/catch and still return the
+// generic FORGOT_GENERIC_MSG so attackers can't probe email-existence
+// via timing or response variance.
+async function sendResetEmail(env, toEmail, resetUrl) {
+  if (env.RESEND_API_KEY) {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.RESEND_API_KEY}` },
+      body: JSON.stringify({
+        from: 'NASAB <noreply@nasab.biz.id>',
+        to: [toEmail],
+        subject: 'Reset Password NASAB',
+        html: `<p>Halo,</p><p>Kami menerima permintaan reset password. Klik link berikut untuk membuat password baru:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>Link berlaku 30 menit. Abaikan email ini jika Anda tidak meminta reset.</p><p>— Tim NASAB</p>`,
+      }),
+    });
+    if (!r.ok) throw new Error(`Resend failed: ${r.status} ${await r.text()}`);
+    return;
+  }
+  // MailChannels fallback (free for CF Workers; DKIM via DNS).
+  const r = await fetch('https://api.mailchannels.net/tx/v1/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: toEmail }] }],
+      from: { email: 'noreply@nasab.biz.id', name: 'NASAB' },
+      subject: 'Reset Password NASAB',
+      content: [{ type: 'text/html', value: `<p>Klik untuk reset password: <a href="${resetUrl}">${resetUrl}</a></p><p>Link berlaku 30 menit.</p>` }],
+    }),
+  });
+  if (!r.ok) throw new Error(`MailChannels failed: ${r.status}`);
+}
 
 // ─── NIK Encryption (AES-GCM) ──────────────────────────────
 async function getEncKey(env) {
@@ -173,48 +284,71 @@ async function verifyPwPBKDF2(password, stored) {
   const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, km, 256);
   return btoa(String.fromCharCode(...new Uint8Array(bits))) === hB;
 }
-async function _signToken(payload, secret) {
-  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(payload) + secret));
-  return btoa(String.fromCharCode(...new Uint8Array(hash))).slice(0, 16);
+// ─── Token signing (HMAC-SHA256, session-backed) ───────────
+// Replaces the prior _signToken which truncated SHA-256 to 16 chars
+// (~72-bit entropy). New tokens are HMAC-SHA256 (256-bit) and backed
+// by a sessions table for revocability via logout.
+// Token format: `<base64url(payload)>.<base64url(hmac)>`
+// Payload: { sid: 'sess_<hex16>', uid: '<userId>', exp: <unix seconds> }
+// Lifetime: 24 hours (was 30 days). On deploy, existing tokens become
+// invalid → all users are logged out exactly once (acceptable per audit).
+// Helpers used here (hmacSign, hmacVerify, requireSecret, bytesToHex)
+// are defined in the A1 helpers block above.
+
+async function makeToken(userId, env, DB, request) {
+  const secret = requireSecret(env);
+  const sessionId = 'sess_' + bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+  const expiresAt = Math.floor(Date.now() / 1000) + 24 * 3600;
+
+  await DB.prepare(
+    'INSERT INTO sessions (id, user_id, expires_at, created_ip, user_agent) VALUES (?, ?, ?, ?, ?)'
+  ).bind(
+    sessionId,
+    userId,
+    expiresAt,
+    clientIp(request),
+    (request.headers.get('User-Agent') || '').slice(0, 200)
+  ).run();
+
+  const payload = btoa(JSON.stringify({ sid: sessionId, uid: userId, exp: expiresAt }))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const sig = await hmacSign(payload, secret);
+  return `${payload}.${sig}`;
 }
-function timingSafeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
-  let r = 0;
-  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return r === 0;
-}
-async function makeToken(userId, env) {
-  const payload = { uid: userId, exp: Date.now() + 30 * 24 * 3600000 };
-  const secret = env.TOKEN_SECRET || 'nasab-secret';
-  const sig = await _signToken(payload, secret);
-  return btoa(JSON.stringify(payload)) + '.' + sig;
-}
-async function verifyToken(token, env) {
+
+async function verifyToken(token, env, DB) {
   try {
-    const [payloadB64, providedSig] = token.split('.');
-    if (!payloadB64 || !providedSig) return null;
-    const payload = JSON.parse(atob(payloadB64));
-    if (!payload || !payload.uid || !payload.exp) return null;
-    if (payload.exp < Date.now()) return null;
-    // Dual-key: try current TOKEN_SECRET first, fall back to legacy literal
-    // for tokens issued before TOKEN_SECRET was set as a Worker secret.
-    // Remove the 'nasab-secret' fallback after 30-day grace period.
-    const secrets = [];
-    if (env?.TOKEN_SECRET) secrets.push(env.TOKEN_SECRET);
-    secrets.push('nasab-secret');
-    for (const secret of secrets) {
-      const expected = await _signToken(payload, secret);
-      if (timingSafeEqual(providedSig, expected)) return payload.uid;
+    const [payloadB64, sig] = token.split('.');
+    if (!payloadB64 || !sig) return null;
+
+    const secret = requireSecret(env);
+    if (!await hmacVerify(payloadB64, sig, secret)) return null;
+
+    const payload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/')));
+    if (!payload.sid || !payload.uid || !payload.exp) return null;
+    if (payload.exp < Math.floor(Date.now() / 1000)) return null;
+
+    const session = await DB.prepare(
+      'SELECT user_id, expires_at FROM sessions WHERE id = ?'
+    ).bind(payload.sid).first();
+
+    if (!session || session.user_id !== payload.uid) return null;
+    if (session.expires_at < Math.floor(Date.now() / 1000)) {
+      await DB.prepare('DELETE FROM sessions WHERE id = ?').bind(payload.sid).run();
+      return null;
     }
+
+    return payload.uid;
+  } catch {
     return null;
-  } catch { return null; }
+  }
 }
 async function getAuthUser(request, DB, env) {
   const auth = request.headers.get('Authorization');
   if (!auth?.startsWith('Bearer ')) return null;
-  const userId = await verifyToken(auth.slice(7), env);
+  const userId = await verifyToken(auth.slice(7), env, DB);
   if (!userId) return null;
-  return DB.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first();
+  return DB.prepare('SELECT id, name, email, role, created_at FROM users WHERE id = ?').bind(userId).first();
 }
 function isAdmin(user) { return user && (user.role === 'admin' || user.role === 'super_admin'); }
 function isSuperAdmin(user) { return user && user.role === 'super_admin'; }
@@ -255,7 +389,7 @@ export default {
         const id = 'u_' + uid();
         const pwHash = await hashPwPBKDF2(password);
         await DB.prepare('INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)').bind(id, name, email.toLowerCase(), pwHash).run();
-        const token = await makeToken(id, env);
+        const token = await makeToken(id, env, DB, request);
         audit(DB, request, {action:'auth.register', resourceType:'user', resourceId:id, actorId:id, actorName:name, details:`Registered ${email}`});
         return json({ token, user: { id, name, email: email.toLowerCase(), role: 'user' } });
       }
@@ -279,9 +413,27 @@ export default {
           }
         }
         if (!valid) return err('Email atau password salah', 401);
-        const token = await makeToken(user.id, env);
+        const token = await makeToken(user.id, env, DB, request);
         audit(DB, request, {action:'auth.login', resourceType:'user', resourceId:user.id, actorId:user.id, actorName:user.name});
         return json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+      }
+
+      if (path === '/api/auth/logout' && method === 'POST') {
+        // Idempotent: succeeds even with invalid/expired token. We only
+        // attempt to delete the session row if we can decode a sid.
+        // Auth NOT required — clients should be able to "log out" stale
+        // tokens without first proving they're valid.
+        const auth = request.headers.get('Authorization');
+        if (auth?.startsWith('Bearer ')) {
+          try {
+            const [payloadB64] = auth.slice(7).split('.');
+            const payload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/')));
+            if (payload?.sid) {
+              await DB.prepare('DELETE FROM sessions WHERE id = ?').bind(payload.sid).run();
+            }
+          } catch {}
+        }
+        return json({ message: 'Logout berhasil' });
       }
 
       if (path === '/api/auth/me' && method === 'GET') {
@@ -290,19 +442,117 @@ export default {
         return json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
       }
 
-      // ── FORGOT PASSWORD ──
+      // ── FORGOT / RESET PASSWORD (token-based flow) ──
+      // Two-step recovery: forgot-password sends an emailed reset link;
+      // reset-password consumes the token to set a new password and
+      // revoke all active sessions for that user. Replaces the prior
+      // single-step `{email, name, new_password}` flow which let anyone
+      // who knew a target's email+name take over the account.
+
+      if (path === '/api/auth/forgot-password' && method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        const email = (body.email || '').trim().toLowerCase();
+        // Email format gate first — invalid input still returns 200 +
+        // generic message so attackers can't probe address validity
+        // separately from existence.
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          return json({ message: FORGOT_GENERIC_MSG }, 200);
+        }
+
+        // Rate limit per (email + IP) — keep the response generic even
+        // when limited, otherwise the 429 itself reveals "this email is
+        // being asked about a lot".
+        const rlKey = await sha256Hex(email + ':' + clientIp(request));
+        if (!await rateLimit('pwreset', rlKey)) {
+          return json({ message: FORGOT_GENERIC_MSG }, 200);
+        }
+
+        const user = await DB.prepare('SELECT id, email FROM users WHERE email = ?').bind(email).first();
+
+        if (user) {
+          // Only one live reset token per account at a time — burn any
+          // previously-issued unused token before minting a new one.
+          await DB.prepare('UPDATE password_resets SET used = 1 WHERE user_id = ? AND used = 0').bind(user.id).run();
+
+          const token = bytesToHex(crypto.getRandomValues(new Uint8Array(32))); // 64 hex chars
+          const tokenHash = await sha256Hex(token);
+          const expiresAt = Math.floor(Date.now() / 1000) + 30 * 60; // 30 min
+
+          await DB.prepare(
+            'INSERT INTO password_resets (id, user_id, token_hash, expires_at, created_ip) VALUES (?, ?, ?, ?, ?)'
+          ).bind('pr_' + uid(), user.id, tokenHash, expiresAt, clientIp(request)).run();
+
+          // Hash-route URL — SPA reads `token` from window.location.hash
+          // post-`?`. Avoids needing Cloudflare Pages SPA-fallback config
+          // for a path-based `/reset-password` route.
+          const resetUrl = `https://nasab.biz.id/#/reset-password?token=${token}`;
+
+          try {
+            await sendResetEmail(env, user.email, resetUrl);
+            audit(DB, request, {
+              action: 'auth.password_reset_requested',
+              resourceType: 'user',
+              resourceId: user.id,
+              actorId: 'system',
+              details: `Reset link sent to ${email}`,
+            });
+          } catch (e) {
+            console.error('sendResetEmail failed', e);
+            // Stay generic — don't leak SMTP/provider failure to client.
+          }
+        }
+
+        return json({ message: FORGOT_GENERIC_MSG }, 200);
+      }
+
       if (path === '/api/auth/reset-password' && method === 'POST') {
-        const body = await request.json();
-        const email = (body.email || '').trim(), name = (body.name || '').trim(), new_password = (body.new_password || '').trim();
-        if (!email || !name || !new_password) return err('Semua field wajib diisi');
-        if (new_password.length < 6) return err('Password minimal 6 karakter');
-        const user = await DB.prepare('SELECT * FROM users WHERE email = ?').bind(email.toLowerCase()).first();
-        if (!user) return err('Email tidak ditemukan');
-        if (user.name.toLowerCase().trim() !== name.toLowerCase().trim()) return err('Nama tidak cocok dengan akun');
-        const pwHash = await hashPwPBKDF2(new_password);
-        await DB.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").bind(pwHash, user.id).run();
-        audit(DB, request, {action:'auth.password_reset', resourceType:'user', actorId:'system', details:`Reset for ${email}`});
-        return json({ message: 'Password berhasil direset. Silakan login.' });
+        const body = await request.json().catch(() => ({}));
+        const token = (body.token || '').trim();
+        const new_password = (body.new_password || '').trim();
+
+        if (typeof token !== 'string' || token.length !== 64) {
+          return err('Token tidak valid');
+        }
+        // Per A4a contract: validatePassword without email arg at this
+        // stage. The register-time check (Group A4b) is the primary gate
+        // for password == email; redoing it here would mean reading
+        // user.email before token verification, which leaks user
+        // existence by timing/error-shape divergence.
+        const pwErr = validatePassword(new_password);
+        if (pwErr) return err(pwErr);
+
+        const tokenHash = await sha256Hex(token);
+        const now = Math.floor(Date.now() / 1000);
+
+        const reset = await DB.prepare(
+          'SELECT id, user_id, expires_at, used FROM password_resets WHERE token_hash = ?'
+        ).bind(tokenHash).first();
+
+        if (!reset || reset.used || reset.expires_at < now) {
+          return err('Token tidak valid atau sudah expired');
+        }
+
+        const newHash = await hashPwPBKDF2(new_password);
+
+        // Atomic batch: rotate password, mark token consumed, revoke
+        // every active session for this user. Forced re-login on all
+        // devices is intentional — the user may be locking out an
+        // attacker who already has a live session.
+        await DB.batch([
+          DB.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").bind(newHash, reset.user_id),
+          DB.prepare("UPDATE password_resets SET used = 1, used_at = datetime('now') WHERE id = ?").bind(reset.id),
+          DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(reset.user_id),
+        ]);
+
+        audit(DB, request, {
+          action: 'auth.password_reset',
+          resourceType: 'user',
+          resourceId: reset.user_id,
+          actorId: 'system',
+          details: 'Password reset via token (secure flow)',
+        });
+
+        return json({ message: 'Password berhasil diubah. Silakan login dengan password baru.' });
       }
 
       // ── FAMILIES ──
