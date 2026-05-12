@@ -76,10 +76,28 @@ function validateUserName(name) {
   if (isSuspiciousInput(t, { minLength: 2, maxLength: 80 })) return 'Nama tidak valid. Gunakan nama asli.';
   return null;
 }
-async function rateLimit(binding, key) {
-  if (!binding || typeof binding.limit !== 'function') return true;
-  try { const { success } = await binding.limit({ key }); return success; }
-  catch { return true; }
+// Per-key rate limit via CF cache API. Deterministic (vs the eventual-
+// consistency window on env.LOGIN_LIMIT etc.) and good enough for
+// brute-force protection. TOCTOU race under concurrent burst can leak
+// 1-2 extra requests through, which is acceptable here.
+const RL_SPECS = {
+  login: { limit: 10, period: 60 },
+  register: { limit: 5, period: 60 },
+  family_create: { limit: 3, period: 60 },
+};
+async function rateLimit(name, key) {
+  const spec = RL_SPECS[name];
+  if (!spec) return true;
+  const cacheKey = `https://rl.nasab.local/${name}/${encodeURIComponent(key)}`;
+  const req = new Request(cacheKey);
+  const cached = await caches.default.match(req);
+  let count = 0;
+  if (cached) count = parseInt(await cached.text(), 10) || 0;
+  if (count >= spec.limit) return false;
+  await caches.default.put(req, new Response(String(count + 1), {
+    headers: { 'Cache-Control': `max-age=${spec.period}` },
+  }));
+  return true;
 }
 function clientIp(request) { return request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown'; }
 
@@ -224,7 +242,7 @@ export default {
     try {
       // ── AUTH ──
       if (path === '/api/auth/register' && method === 'POST') {
-        if (!await rateLimit(env.REGISTER_LIMIT, clientIp(request))) return err('Terlalu banyak percobaan registrasi. Coba lagi dalam 1 menit.', 429);
+        if (!await rateLimit('register', clientIp(request))) return err('Terlalu banyak percobaan registrasi. Coba lagi dalam 1 menit.', 429);
         const body = await request.json();
         const name = (body.name || '').trim(), email = (body.email || '').trim(), password = (body.password || '').trim();
         if (!name || !email || !password) return err('Semua field wajib diisi');
@@ -243,7 +261,7 @@ export default {
       }
 
       if (path === '/api/auth/login' && method === 'POST') {
-        if (!await rateLimit(env.LOGIN_LIMIT, clientIp(request))) return err('Terlalu banyak percobaan login. Coba lagi dalam 1 menit.', 429);
+        if (!await rateLimit('login', clientIp(request))) return err('Terlalu banyak percobaan login. Coba lagi dalam 1 menit.', 429);
         const body = await request.json();
         const email = (body.email || '').trim(), password = (body.password || '').trim();
         if (!email || !password) return err('Email dan password wajib');
@@ -300,7 +318,7 @@ export default {
       if (path === '/api/families' && method === 'POST') {
         const user = await getAuthUser(request, DB, env);
         if (!user) return err('Unauthorized', 401);
-        if (!await rateLimit(env.FAMILY_CREATE_LIMIT, `user:${user.id}`)) return err('Anda membuat keluarga terlalu cepat. Coba lagi dalam 1 menit.', 429);
+        if (!await rateLimit('family_create', `user:${user.id}`)) return err('Anda membuat keluarga terlalu cepat. Coba lagi dalam 1 menit.', 429);
         const { name, description } = await request.json();
         const nameErr = validateFamilyName(name);
         if (nameErr) return err(nameErr);

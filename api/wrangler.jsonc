@@ -9,11 +9,8 @@
       "database_id": "745e2555-b659-4eb7-bc60-5a705eb6a15a"
     }
   ],
-  "unsafe": {
-    "bindings": [
-      { "name": "REGISTER_LIMIT", "type": "ratelimit", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
-      { "name": "FAMILY_CREATE_LIMIT", "type": "ratelimit", "namespace_id": "1002", "simple": { "limit": 3, "period": 60 } },
-      { "name": "LOGIN_LIMIT", "type": "ratelimit", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } }
-    ]
-  }
+  // Rate limiting is implemented in src/index.js via CF cache API instead
+  // of the ratelimit binding — the binding's eventual-consistency window
+  // let bursts leak well over the configured limit (tested: 15/15 passed
+  // a 10/60s binding on 2026-05-12). Cache-API enforcement is immediate.
 }

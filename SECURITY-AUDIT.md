@@ -16,7 +16,7 @@ Temuan paling mendesak: **AI API keys disimpan plaintext di localStorage browser
 
 | Prioritas | Temuan | Severity | Effort | Status |
 |---|---|---|---|---|
-| P0 | Cache header salah → CDN tidak cache asset | High | Low | 🟡 Partial (ac8bde6 v8.1.7 — duplicate header bug masih ada di `_headers`, fix pending deploy 2026-05-12) |
+| P0 | Cache header salah → CDN tidak cache asset | High | Low | ✅ Closed (ac8bde6 v8.1.7 + 964395a v8.3.3 — duplicate header fix; `immutable` now single-value live) |
 | P0 | AI crawler bot tidak diblok → traffic abuse | Medium | Low | ✅ Closed (CF dashboard — GPTBot/ClaudeBot/CCBot/Bytespider semua 403) |
 | P0 | Service Worker strategy bug → user stuck "Memuat" | High | Low | ✅ Closed (ac8bde6 v8.1.7 → live SW v37, network-first shell) |
 | P1 | AI API keys plaintext di localStorage | **Critical** | Medium | ✅ Closed (540b285 v8.3.0 — AI proxy via Worker + encrypted key storage; bundle bersih dari direct calls) |
@@ -31,11 +31,13 @@ Temuan paling mendesak: **AI API keys disimpan plaintext di localStorage browser
 
 Verifier (`verify-deploy.sh`) terhadap production: **21 PASS / 3 WARN / 2 FAIL**.
 
+**Findings yang sudah ditutup hari ini:**
+- ✅ **Duplicate `Cache-Control` header pada `/assets/*`** — Fixed di commit `964395a` (v8.3.3). Root cause: `_headers` /* rule menambah `must-revalidate` yang di-merge dengan `immutable` dari /assets/* (CF Pages concatenate, `!` cuma strip Pages defaults bukan user rules less-specific). Solusi: drop Cache-Control dari /*; HTML pakai Pages default. Verified: single value `public, max-age=31536000, immutable` di prod.
+- ✅ **No rate-limit di `/api/auth/login`** — Worker rate limit binding sebenarnya sudah declared di wrangler.jsonc tapi pakai syntax `unsafe.bindings` yang silently dropped di wrangler 4.x. Migrasi ke `ratelimits` top-level berhasil load binding tapi eventual-consistency window membuat burst 15/15 lolos. Switched ke cache-API based rate limiter — deterministic, fires tepat di request ke-11. Verified: 10 OK + 2 × 429.
+
 **Findings yang masih perlu follow-up:**
-1. **Duplicate `Cache-Control` header pada `/assets/*`** — `_headers` set `immutable` di `/assets/*` tapi `/*` rule juga set `must-revalidate`. CF Pages concatenate keduanya → `cf-cache-status: REVALIDATED` (bukan HIT). Root cause: `!` syntax hanya remove Pages defaults, bukan rule dari path less-specific. Fix sudah di-edit di `public/_headers` + `dist/_headers`, pending deploy.
-2. **CSP masih Report-Only** — sudah live 2 minggu+, layak monitor violations lalu enforce.
-3. **No rate-limit di `/api/auth/login`** — 10 rapid requests semua sukses. Tambahkan WAF rule atau Worker-side throttle.
-4. **Main bundle 252KB raw** — vendor split sudah dilakukan, tapi `index-*.js` masih besar. Route-level `React.lazy` untuk admin/faraidh/canvas masih bisa turunkan signifikan.
+1. **CSP masih Report-Only** — sudah live 2 minggu+, layak monitor violations lalu enforce.
+2. **Main bundle 70KB gzip / 258KB raw** — vendor split sudah dilakukan (`vendor-react` 60KB gzip terpisah). Route-level `React.lazy` untuk admin/faraidh/canvas masih bisa turunkan main initial paint signifikan.
 
 ---
 

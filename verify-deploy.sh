@@ -311,10 +311,11 @@ fi
 section "8. RATE LIMIT API (basic)"
 # ════════════════════════════════════════════════════════════
 
-info "Sending 10 rapid requests ke /api/auth/login (cek rate limit)..."
+# LOGIN_LIMIT is 10/60s — send 12 to ensure the limiter actually fires.
+info "Sending 12 rapid requests ke /api/auth/login (cek rate limit)..."
 SUCCESS=0
 LIMITED=0
-for i in $(seq 1 10); do
+for i in $(seq 1 12); do
   CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$API/api/auth/login" \
     -H "Content-Type: application/json" \
     -d '{"email":"test@test.com","password":"x"}')
